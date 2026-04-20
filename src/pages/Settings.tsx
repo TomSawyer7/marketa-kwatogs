@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { z } from "zod";
 import { AppShell } from "@/components/layout/AppShell";
@@ -11,8 +11,9 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useMarketa } from "@/store/marketa";
+import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
-import { Camera, ArrowLeft, Trash2 } from "lucide-react";
+import { Camera, ArrowLeft, Trash2, LogOut } from "lucide-react";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
@@ -28,12 +29,22 @@ const profileSchema = z.object({
 const Settings = () => {
   const navigate = useNavigate();
   const { profile, updateProfile, myListings } = useMarketa();
+  const { user, signOut } = useAuth();
   const [form, setForm] = useState(profile);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Keep form in sync with profile (e.g., when Supabase profile loads after auth)
+  useEffect(() => { setForm(profile); }, [profile]);
 
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => {
     setForm((f) => ({ ...f, [k]: v }));
     setErrors((e) => ({ ...e, [k as string]: "" }));
+  };
+
+  const onLogout = async () => {
+    await signOut();
+    toast.success("Logged out");
+    navigate("/");
   };
 
   const onAvatar = (e: ChangeEvent<HTMLInputElement>) => {
@@ -177,6 +188,18 @@ const Settings = () => {
             <Button type="submit">Save changes</Button>
           </div>
         </form>
+
+        {user && (
+          <section className="mt-6 bg-card border border-border rounded-lg p-5 md:p-6 flex items-center justify-between gap-4">
+            <div>
+              <h3 className="font-semibold">Session</h3>
+              <p className="text-sm text-muted-foreground">Signed in as {user.email}.</p>
+            </div>
+            <Button variant="outline" onClick={onLogout} className="gap-2">
+              <LogOut className="h-4 w-4" /> Log out
+            </Button>
+          </section>
+        )}
 
         <Separator className="my-8" />
 

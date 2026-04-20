@@ -1,6 +1,8 @@
-import { createContext, useContext, useMemo, ReactNode, useCallback } from "react";
+import { createContext, useContext, useMemo, ReactNode, useCallback, useEffect, useState } from "react";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { SEED_LISTINGS, SELLERS } from "@/lib/seed";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/use-auth";
 import type { Listing, Seller } from "@/lib/types";
 
 type Profile = {
@@ -42,9 +44,52 @@ type Ctx = {
 const MarketaContext = createContext<Ctx | null>(null);
 
 export function MarketaProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
   const [userListings, setUserListings] = useLocalStorage<Listing[]>("marketa.userListings", []);
   const [saved, setSaved] = useLocalStorage<string[]>("marketa.saved", []);
-  const [profile, setProfile] = useLocalStorage<Profile>("marketa.profile", DEFAULT_PROFILE);
+  const [localProfile, setLocalProfile] = useLocalStorage<Profile>("marketa.profile", DEFAULT_PROFILE);
+  const [remoteProfile, setRemoteProfile] = useState<Profile | null>(null);
+
+  // Hydrate profile from Supabase when logged in
+  useEffect(() => {
+    let cancelled = false;
+    if (!user) {
+      setRemoteProfile(null);
+      return;
+    }
+    (async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("name, email, location, bio, avatar_url, visibility, notifications")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (cancelled) return;
+      if (error || !data) {
+        // Fall back to auth metadata if the profiles row isn't there yet (table not created)
+        const meta = (user.user_metadata ?? {}) as { name?: string };
+        setRemoteProfile({
+          ...DEFAULT_PROFILE,
+          name: meta.name ?? user.email?.split("@")[0] ?? "You",
+          email: user.email ?? "",
+          avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(meta.name ?? user.email ?? "You")}&backgroundColor=1877f2`,
+        });
+        return;
+      }
+      setRemoteProfile({
+        name: data.name ?? user.email?.split("@")[0] ?? "You",
+        email: data.email ?? user.email ?? "",
+        location: data.location ?? DEFAULT_PROFILE.location,
+        bio: data.bio ?? "",
+        avatar: data.avatar_url ?? `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(data.name ?? user.email ?? "You")}&backgroundColor=1877f2`,
+        notifications: (data.notifications as Profile["notifications"]) ?? DEFAULT_PROFILE.notifications,
+        visibility: (data.visibility as Profile["visibility"]) ?? "public",
+      });
+    })();
+    return () => { cancelled = true; };
+  }, [user]);
+
+  const profile = remoteProfile ?? localProfile;
 
   const sellers = useMemo<Seller[]>(() => {
     return SELLERS.map((s) =>
@@ -91,8 +136,34 @@ export function MarketaProvider({ children }: { children: ReactNode }) {
   }, [setUserListings, setSaved]);
 
   const updateProfile: Ctx["updateProfile"] = useCallback((p) => {
-    setProfile((prev) => ({ ...prev, ...p, notifications: { ...prev.notifications, ...(p.notifications ?? {}) } }));
-  }, [setProfile]);
+    if (user) {
+      // Update local mirror immediately for snappy UI
+      setRemoteProfile((prev) => {
+        const base = prev ?? DEFAULT_PROFILE;
+        return { ...base, ...p, notifications: { ...base.notifications, ...(p.notifications ?? {}) } };
+      });
+      // Persist to Supabase (best-effort; ignored if profiles table not yet created)
+      const next = {
+        name: p.name,
+        email: p.email,
+        location: p.location,
+        bio: p.bio,
+        avatar_url: p.avatar,
+        visibility: p.visibility,
+        notifications: p.notifications,
+        updated_at: new Date().toISOString(),
+      };
+      // Strip undefined keys
+      const payload = Object.fromEntries(Object.entries(next).filter(([, v]) => v !== undefined));
+      supabase.from("profiles").update(payload).eq("id", user.id).then(({ error }) => {
+        if (error) console.warn("[marketa] profile update skipped:", error.message);
+      });
+    } else {
+      setLocalProfile((prev) => ({
+        ...prev, ...p, notifications: { ...prev.notifications, ...(p.notifications ?? {}) },
+      }));
+    }
+  }, [user, setLocalProfile]);
 
   const value: Ctx = {
     listings, myListings, saved, profile, sellers,

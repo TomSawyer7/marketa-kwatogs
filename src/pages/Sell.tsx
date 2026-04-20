@@ -175,7 +175,7 @@ const Sell = () => {
               {errors.title && <p className="text-xs text-destructive mt-1">{errors.title}</p>}
             </div>
             <div>
-              <Label htmlFor="price">Price (USD)</Label>
+              <Label htmlFor="price">Price (PHP)</Label>
               <Input
                 id="price" type="number" inputMode="numeric" min={0} value={form.price}
                 onChange={(e) => setField("price", e.target.value)}
