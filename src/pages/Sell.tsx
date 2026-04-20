@@ -79,7 +79,9 @@ const Sell = () => {
 
   const removeImage = (i: number) => setField("images", form.images.filter((_, idx) => idx !== i));
 
-  const onSubmit = (e: FormEvent) => {
+  const [submitting, setSubmitting] = useState(false);
+
+  const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const parsed = sellSchema.safeParse({
       title: form.title,
@@ -112,14 +114,21 @@ const Sell = () => {
       images: parsed.data.images,
     };
 
-    if (isEditing && editing) {
-      updateListing(editing.id, data);
-      toast.success("Listing updated");
-      navigate(`/item/${editing.id}`);
-    } else {
-      const created = addListing(data);
-      toast.success("Listing published");
-      navigate(`/item/${created.id}`);
+    setSubmitting(true);
+    try {
+      if (isEditing && editing) {
+        await updateListing(editing.id, data);
+        toast.success("Listing updated");
+        navigate(`/item/${editing.id}`);
+      } else {
+        const created = await addListing(data);
+        if (created) {
+          toast.success("Listing published");
+          navigate(`/item/${created.id}`);
+        }
+      }
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -227,8 +236,8 @@ const Sell = () => {
 
           <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
             <Button asChild type="button" variant="outline"><Link to="/profile">Cancel</Link></Button>
-            <Button type="submit" className="gap-2">
-              {isEditing ? "Save changes" : "Publish listing"}
+            <Button type="submit" className="gap-2" disabled={submitting}>
+              {submitting ? "Saving..." : isEditing ? "Save changes" : "Publish listing"}
             </Button>
           </div>
         </form>
