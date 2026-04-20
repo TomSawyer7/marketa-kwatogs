@@ -207,14 +207,13 @@ function Step1Upload({ onSubmitted, previousNotes }: { onSubmitted: () => void; 
     setSubmitting(true); setServerError(null);
     try {
       const [frontData, backData] = await Promise.all([
-        compressImageToDataUrl(front, 1280, 0.75),
-        compressImageToDataUrl(back, 1280, 0.75),
+        compressImageToDataUrl(front, { maxDim: 960, quality: 0.72, maxBytes: 180 * 1024 }),
+        compressImageToDataUrl(back, { maxDim: 960, quality: 0.72, maxBytes: 180 * 1024 }),
       ]);
       const { data, error } = await supabase.functions.invoke("verify-id-ocr", {
         body: { frontImage: frontData, backImage: backData },
       });
       if (error) {
-        // edge function returned non-2xx — error.message is generic; pull body
         const msg = (data as { error?: string } | undefined)?.error ?? error.message ?? "Submission failed.";
         setServerError(msg);
         toast.error(msg);
