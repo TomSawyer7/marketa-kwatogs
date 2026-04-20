@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
-import { Search, Plus, Bookmark, User, MessageCircle, Store, LogOut, Settings as SettingsIcon, UserCircle } from "lucide-react";
+import { Search, Plus, Bookmark, User, MessageCircle, Store, LogOut, Settings as SettingsIcon, UserCircle, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -16,7 +16,7 @@ import { CategoryBar } from "./CategoryBar";
 export function Header() {
   const navigate = useNavigate();
   const { profile } = useMarketa();
-  const { user, signOut } = useAuth();
+  const { user, isAdmin, signOut } = useAuth();
   const [q, setQ] = useState("");
 
   const onSearch = (e: FormEvent) => {
@@ -118,6 +118,13 @@ export function Header() {
                     <SettingsIcon className="h-4 w-4 mr-2" /> Settings
                   </Link>
                 </DropdownMenuItem>
+                {isAdmin && (
+                  <DropdownMenuItem asChild>
+                    <Link to="/admin" className="cursor-pointer">
+                      <ShieldCheck className="h-4 w-4 mr-2" /> Admin
+                    </Link>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={onLogout} className="cursor-pointer text-destructive focus:text-destructive">
                   <LogOut className="h-4 w-4 mr-2" /> Log out
