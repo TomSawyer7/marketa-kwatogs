@@ -8,16 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useMarketa } from "@/store/marketa";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
-import { Camera, ArrowLeft, Trash2, LogOut } from "lucide-react";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+import { Camera, ArrowLeft, LogOut } from "lucide-react";
 
 const profileSchema = z.object({
   name: z.string().trim().min(2, "Name must be at least 2 characters").max(60),
@@ -28,10 +23,11 @@ const profileSchema = z.object({
 
 const Settings = () => {
   const navigate = useNavigate();
-  const { profile, updateProfile, myListings } = useMarketa();
+  const { profile, updateProfile } = useMarketa();
   const { user, signOut } = useAuth();
   const [form, setForm] = useState(profile);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
 
   // Keep form in sync with profile (e.g., when Supabase profile loads after auth)
   useEffect(() => { setForm(profile); }, [profile]);
@@ -58,7 +54,7 @@ const Settings = () => {
     e.target.value = "";
   };
 
-  const onSubmit = (e: FormEvent) => {
+  const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const parsed = profileSchema.safeParse({
       name: form.name, email: form.email, location: form.location, bio: form.bio,
@@ -73,16 +69,13 @@ const Settings = () => {
       toast.error("Please fix the highlighted fields.");
       return;
     }
-    updateProfile(form);
-    toast.success("Settings saved");
-  };
-
-  const onResetData = () => {
-    localStorage.removeItem("marketa.userListings");
-    localStorage.removeItem("marketa.saved");
-    localStorage.removeItem("marketa.profile");
-    toast.success("Local data cleared. Reloading...");
-    setTimeout(() => window.location.assign("/"), 600);
+    setSaving(true);
+    try {
+      await updateProfile(form);
+      toast.success("Settings saved");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -184,8 +177,8 @@ const Settings = () => {
           </section>
 
           <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
-            <Button type="button" variant="ghost" onClick={() => setForm(profile)}>Reset</Button>
-            <Button type="submit">Save changes</Button>
+            <Button type="button" variant="ghost" onClick={() => setForm(profile)} disabled={saving}>Reset</Button>
+            <Button type="submit" disabled={saving}>{saving ? "Saving..." : "Save changes"}</Button>
           </div>
         </form>
 
@@ -200,38 +193,6 @@ const Settings = () => {
             </Button>
           </section>
         )}
-
-        <Separator className="my-8" />
-
-        {/* Danger zone */}
-        <section className="bg-card border border-destructive/30 rounded-lg p-5 md:p-6">
-          <h3 className="font-semibold text-lg text-destructive">Danger zone</h3>
-          <p className="text-sm text-muted-foreground mt-1">
-            Clear all locally stored data — your profile, your {myListings.length} {myListings.length === 1 ? "listing" : "listings"}, and saved items.
-          </p>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="outline" className="mt-3 gap-2 text-destructive hover:text-destructive border-destructive/30">
-                <Trash2 className="h-4 w-4" /> Reset Marketa data
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Reset all local data?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This removes your profile changes, your listings, and saved items from this device. This cannot be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={onResetData}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                >Reset everything</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </section>
       </div>
     </AppShell>
   );

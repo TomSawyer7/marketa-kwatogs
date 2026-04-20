@@ -3,6 +3,7 @@ import { useLocalStorage } from "@/hooks/use-local-storage";
 import { SEED_LISTINGS, SELLERS } from "@/lib/seed";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { toast } from "sonner";
 import type { Listing, Seller } from "@/lib/types";
 
 type Profile = {
@@ -31,26 +32,56 @@ type Ctx = {
   saved: string[];
   profile: Profile;
   sellers: Seller[];
+  currentUserId: string | null;
+  loadingListings: boolean;
   getSeller: (id: string) => Seller | undefined;
   getListing: (id: string) => Listing | undefined;
-  toggleSave: (id: string) => void;
+  toggleSave: (id: string) => Promise<void>;
   isSaved: (id: string) => boolean;
-  addListing: (l: Omit<Listing, "id" | "sellerId" | "createdAt">) => Listing;
-  updateListing: (id: string, patch: Partial<Listing>) => void;
-  deleteListing: (id: string) => void;
-  updateProfile: (p: Partial<Profile>) => void;
+  addListing: (l: Omit<Listing, "id" | "sellerId" | "createdAt">) => Promise<Listing | null>;
+  updateListing: (id: string, patch: Partial<Listing>) => Promise<void>;
+  deleteListing: (id: string) => Promise<void>;
+  updateProfile: (p: Partial<Profile>) => Promise<void>;
 };
 
 const MarketaContext = createContext<Ctx | null>(null);
 
+type DbListing = {
+  id: string;
+  seller_id: string;
+  title: string;
+  description: string;
+  category: string;
+  condition: string;
+  location: string;
+  price: number;
+  images: string[];
+  created_at: string;
+};
+
+const fromDb = (r: DbListing): Listing => ({
+  id: r.id,
+  sellerId: r.seller_id,
+  title: r.title,
+  description: r.description,
+  category: r.category,
+  condition: r.condition as Listing["condition"],
+  location: r.location,
+  price: Number(r.price),
+  images: r.images ?? [],
+  createdAt: new Date(r.created_at).getTime(),
+});
+
 export function MarketaProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const [userListings, setUserListings] = useLocalStorage<Listing[]>("marketa.userListings", []);
-  const [saved, setSaved] = useLocalStorage<string[]>("marketa.saved", []);
   const [localProfile, setLocalProfile] = useLocalStorage<Profile>("marketa.profile", DEFAULT_PROFILE);
   const [remoteProfile, setRemoteProfile] = useState<Profile | null>(null);
 
-  // Hydrate profile from Supabase when logged in
+  const [dbListings, setDbListings] = useState<Listing[]>([]);
+  const [loadingListings, setLoadingListings] = useState(true);
+  const [saved, setSaved] = useState<string[]>([]);
+
+  // ---- Profiles ----
   useEffect(() => {
     let cancelled = false;
     if (!user) {
@@ -66,7 +97,6 @@ export function MarketaProvider({ children }: { children: ReactNode }) {
 
       if (cancelled) return;
       if (error || !data) {
-        // Fall back to auth metadata if the profiles row isn't there yet (table not created)
         const meta = (user.user_metadata ?? {}) as { name?: string };
         setRemoteProfile({
           ...DEFAULT_PROFILE,
@@ -91,58 +121,199 @@ export function MarketaProvider({ children }: { children: ReactNode }) {
 
   const profile = remoteProfile ?? localProfile;
 
+  // ---- Listings (from Supabase) ----
+  const refreshListings = useCallback(async () => {
+    setLoadingListings(true);
+    const { data, error } = await supabase
+      .from("listings")
+      .select("id, seller_id, title, description, category, condition, location, price, images, created_at")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.warn("[marketa] listings load failed:", error.message);
+      setDbListings([]);
+    } else {
+      setDbListings((data as DbListing[]).map(fromDb));
+    }
+    setLoadingListings(false);
+  }, []);
+
+  useEffect(() => {
+    refreshListings();
+  }, [refreshListings]);
+
+  // ---- Saved listings (from Supabase) ----
+  useEffect(() => {
+    let cancelled = false;
+    if (!user) {
+      setSaved([]);
+      return;
+    }
+    (async () => {
+      const { data, error } = await supabase
+        .from("saved_listings")
+        .select("listing_id")
+        .eq("user_id", user.id);
+      if (cancelled) return;
+      if (error) {
+        console.warn("[marketa] saved load failed:", error.message);
+        setSaved([]);
+      } else {
+        setSaved(data.map((r) => r.listing_id));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user]);
+
+  // ---- Derived data ----
   const sellers = useMemo<Seller[]>(() => {
-    return SELLERS.map((s) =>
+    const base = SELLERS.map((s) =>
       s.id === "u_me"
         ? { ...s, name: profile.name, avatar: profile.avatar, location: profile.location, bio: profile.bio }
         : s,
     );
-  }, [profile]);
+    if (user) {
+      // Inject the real user as a seller so their listings resolve a seller card.
+      const exists = base.find((s) => s.id === user.id);
+      if (!exists) {
+        base.unshift({
+          id: user.id,
+          name: profile.name,
+          avatar: profile.avatar,
+          joinedAt: new Date(user.created_at ?? Date.now()).getTime(),
+          location: profile.location,
+          bio: profile.bio,
+          rating: 5.0,
+        });
+      }
+    }
+    return base;
+  }, [profile, user]);
 
-  const listings = useMemo<Listing[]>(
-    () => [...userListings, ...SEED_LISTINGS],
-    [userListings],
+  // Merge DB listings + read-only seed listings (seed first sorted in)
+  const listings = useMemo<Listing[]>(() => {
+    return [...dbListings, ...SEED_LISTINGS].sort((a, b) => b.createdAt - a.createdAt);
+  }, [dbListings]);
+
+  const myListings = useMemo(
+    () => (user ? dbListings.filter((l) => l.sellerId === user.id) : []),
+    [dbListings, user],
   );
-
-  const myListings = useMemo(() => userListings.slice().sort((a, b) => b.createdAt - a.createdAt), [userListings]);
 
   const getSeller = useCallback((id: string) => sellers.find((s) => s.id === id), [sellers]);
   const getListing = useCallback((id: string) => listings.find((l) => l.id === id), [listings]);
 
-  const toggleSave = useCallback((id: string) => {
-    setSaved((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [id, ...prev]));
-  }, [setSaved]);
+  // ---- Saved ops ----
+  const toggleSave = useCallback(async (id: string) => {
+    if (!user) {
+      toast.error("Log in to save listings");
+      return;
+    }
+    const already = saved.includes(id);
+    // optimistic
+    setSaved((prev) => (already ? prev.filter((x) => x !== id) : [id, ...prev]));
+    if (already) {
+      const { error } = await supabase
+        .from("saved_listings")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("listing_id", id);
+      if (error) {
+        toast.error("Couldn't unsave: " + error.message);
+        setSaved((prev) => [id, ...prev]);
+      }
+    } else {
+      const { error } = await supabase
+        .from("saved_listings")
+        .insert({ user_id: user.id, listing_id: id });
+      if (error) {
+        toast.error("Couldn't save: " + error.message);
+        setSaved((prev) => prev.filter((x) => x !== id));
+      }
+    }
+  }, [user, saved]);
 
   const isSaved = useCallback((id: string) => saved.includes(id), [saved]);
 
-  const addListing: Ctx["addListing"] = useCallback((l) => {
-    const newListing: Listing = {
-      ...l,
-      id: `my_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-      sellerId: "u_me",
-      createdAt: Date.now(),
-    };
-    setUserListings((prev) => [newListing, ...prev]);
-    return newListing;
-  }, [setUserListings]);
+  // ---- Listing CRUD ----
+  const addListing: Ctx["addListing"] = useCallback(async (l) => {
+    if (!user) {
+      toast.error("Log in to create a listing");
+      return null;
+    }
+    const { data, error } = await supabase
+      .from("listings")
+      .insert({
+        seller_id: user.id,
+        title: l.title,
+        description: l.description,
+        category: l.category,
+        condition: l.condition,
+        location: l.location,
+        price: l.price,
+        images: l.images,
+      })
+      .select("id, seller_id, title, description, category, condition, location, price, images, created_at")
+      .single();
 
-  const updateListing: Ctx["updateListing"] = useCallback((id, patch) => {
-    setUserListings((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
-  }, [setUserListings]);
+    if (error || !data) {
+      toast.error("Couldn't publish: " + (error?.message ?? "unknown error"));
+      return null;
+    }
+    const created = fromDb(data as DbListing);
+    setDbListings((prev) => [created, ...prev]);
+    return created;
+  }, [user]);
 
-  const deleteListing: Ctx["deleteListing"] = useCallback((id) => {
-    setUserListings((prev) => prev.filter((l) => l.id !== id));
+  const updateListing: Ctx["updateListing"] = useCallback(async (id, patch) => {
+    if (!user) return;
+    const dbPatch: Record<string, unknown> = {};
+    if (patch.title !== undefined) dbPatch.title = patch.title;
+    if (patch.description !== undefined) dbPatch.description = patch.description;
+    if (patch.category !== undefined) dbPatch.category = patch.category;
+    if (patch.condition !== undefined) dbPatch.condition = patch.condition;
+    if (patch.location !== undefined) dbPatch.location = patch.location;
+    if (patch.price !== undefined) dbPatch.price = patch.price;
+    if (patch.images !== undefined) dbPatch.images = patch.images;
+
+    const { data, error } = await supabase
+      .from("listings")
+      .update(dbPatch)
+      .eq("id", id)
+      .eq("seller_id", user.id)
+      .select("id, seller_id, title, description, category, condition, location, price, images, created_at")
+      .single();
+
+    if (error || !data) {
+      toast.error("Couldn't update: " + (error?.message ?? "unknown"));
+      return;
+    }
+    const updated = fromDb(data as DbListing);
+    setDbListings((prev) => prev.map((l) => (l.id === id ? updated : l)));
+  }, [user]);
+
+  const deleteListing: Ctx["deleteListing"] = useCallback(async (id) => {
+    if (!user) return;
+    const { error } = await supabase
+      .from("listings")
+      .delete()
+      .eq("id", id)
+      .eq("seller_id", user.id);
+    if (error) {
+      toast.error("Couldn't delete: " + error.message);
+      return;
+    }
+    setDbListings((prev) => prev.filter((l) => l.id !== id));
     setSaved((prev) => prev.filter((s) => s !== id));
-  }, [setUserListings, setSaved]);
+  }, [user]);
 
-  const updateProfile: Ctx["updateProfile"] = useCallback((p) => {
+  // ---- Profile update ----
+  const updateProfile: Ctx["updateProfile"] = useCallback(async (p) => {
     if (user) {
-      // Update local mirror immediately for snappy UI
       setRemoteProfile((prev) => {
         const base = prev ?? DEFAULT_PROFILE;
         return { ...base, ...p, notifications: { ...base.notifications, ...(p.notifications ?? {}) } };
       });
-      // Persist to Supabase (best-effort; ignored if profiles table not yet created)
       const next = {
         name: p.name,
         email: p.email,
@@ -153,11 +324,11 @@ export function MarketaProvider({ children }: { children: ReactNode }) {
         notifications: p.notifications,
         updated_at: new Date().toISOString(),
       };
-      // Strip undefined keys
       const payload = Object.fromEntries(Object.entries(next).filter(([, v]) => v !== undefined));
-      supabase.from("profiles").update(payload).eq("id", user.id).then(({ error }) => {
-        if (error) console.warn("[marketa] profile update skipped:", error.message);
-      });
+      const { error } = await supabase.from("profiles").update(payload).eq("id", user.id);
+      if (error) {
+        toast.error("Couldn't save profile: " + error.message);
+      }
     } else {
       setLocalProfile((prev) => ({
         ...prev, ...p, notifications: { ...prev.notifications, ...(p.notifications ?? {}) },
@@ -167,6 +338,8 @@ export function MarketaProvider({ children }: { children: ReactNode }) {
 
   const value: Ctx = {
     listings, myListings, saved, profile, sellers,
+    currentUserId: user?.id ?? null,
+    loadingListings,
     getSeller, getListing, toggleSave, isSaved,
     addListing, updateListing, deleteListing, updateProfile,
   };
