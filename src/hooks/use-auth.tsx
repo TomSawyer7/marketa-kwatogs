@@ -6,6 +6,9 @@ type AuthCtx = {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  isVerified: boolean;
+  isAdmin: boolean;
+  refreshStatus: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (email: string, password: string, name: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
@@ -17,23 +20,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isVerified, setIsVerified] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  const fetchStatus = useCallback(async (uid: string | null) => {
+    if (!uid) {
+      setIsVerified(false);
+      setIsAdmin(false);
+      return;
+    }
+    const [{ data: prof }, { data: roles }] = await Promise.all([
+      supabase.from("profiles").select("is_verified").eq("id", uid).maybeSingle(),
+      supabase.from("user_roles").select("role").eq("user_id", uid),
+    ]);
+    setIsVerified(Boolean(prof?.is_verified));
+    setIsAdmin(Boolean(roles?.some((r: { role: string }) => r.role === "admin")));
+  }, []);
 
   useEffect(() => {
-    // 1. Subscribe FIRST to avoid race conditions
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
       setUser(s?.user ?? null);
+      // defer DB call to avoid recursion deadlocks
+      setTimeout(() => fetchStatus(s?.user?.id ?? null), 0);
     });
 
-    // 2. Then fetch existing session
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
       setUser(s?.user ?? null);
-      setLoading(false);
+      fetchStatus(s?.user?.id ?? null).finally(() => setLoading(false));
     });
 
     return () => sub.subscription.unsubscribe();
-  }, []);
+  }, [fetchStatus]);
+
+  const refreshStatus = useCallback(async () => {
+    await fetchStatus(user?.id ?? null);
+  }, [fetchStatus, user]);
 
   const signIn = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -45,10 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { error } = await supabase.auth.signUp({
       email,
       password,
-      options: {
-        emailRedirectTo: redirectUrl,
-        data: { name },
-      },
+      options: { emailRedirectTo: redirectUrl, data: { name } },
     });
     return { error: error?.message ?? null };
   }, []);
@@ -58,7 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <Ctx.Provider value={{ user, session, loading, signIn, signUp, signOut }}>
+    <Ctx.Provider value={{ user, session, loading, isVerified, isAdmin, refreshStatus, signIn, signUp, signOut }}>
       {children}
     </Ctx.Provider>
   );
