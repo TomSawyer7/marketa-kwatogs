@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
-import { estimateBlurScore, fileToDataUrl } from "@/lib/image-quality";
+import { estimateBlurScore, compressImageToDataUrl } from "@/lib/image-quality";
 
 type VerifRow = {
   status: "pending" | "id_approved" | "verified" | "rejected" | null;
