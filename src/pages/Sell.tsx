@@ -102,12 +102,22 @@ const Sell = () => {
       return;
     }
 
+    const data = {
+      title: parsed.data.title,
+      price: parsed.data.price,
+      category: parsed.data.category,
+      condition: parsed.data.condition as Condition,
+      location: parsed.data.location,
+      description: parsed.data.description,
+      images: parsed.data.images,
+    };
+
     if (isEditing && editing) {
-      updateListing(editing.id, parsed.data);
+      updateListing(editing.id, data);
       toast.success("Listing updated");
       navigate(`/item/${editing.id}`);
     } else {
-      const created = addListing(parsed.data);
+      const created = addListing(data);
       toast.success("Listing published");
       navigate(`/item/${created.id}`);
     }
