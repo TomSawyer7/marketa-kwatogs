@@ -1,13 +1,8 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
+import { createClient } from "npm:@supabase/supabase-js@2";
+import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
 type Body = {
-  frontImage: string; // data URL or base64
+  frontImage: string;
   backImage: string;
 };
 
@@ -18,38 +13,55 @@ function dataUrlToParts(d: string): { mime: string; b64: string } {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
 
   try {
-    const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-    const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+    const ANON = Deno.env.get("SUPABASE_ANON_KEY");
+    const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+
+    if (!SUPABASE_URL || !ANON || !SERVICE) {
+      return new Response(JSON.stringify({ error: "Missing function environment variables" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (!LOVABLE_API_KEY) {
+      return new Response(JSON.stringify({ error: "LOVABLE_API_KEY not configured" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const auth = req.headers.get("Authorization") ?? "";
     const userClient = createClient(SUPABASE_URL, ANON, {
       global: { headers: { Authorization: auth } },
     });
+
     const { data: userData, error: userErr } = await userClient.auth.getUser();
     if (userErr || !userData.user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    const user = userData.user;
 
-    const body = (await req.json()) as Body;
+    const body = (await req.json().catch(() => null)) as Body | null;
     if (!body?.frontImage || !body?.backImage) {
       return new Response(JSON.stringify({ error: "Both front and back images are required" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
+    const user = userData.user;
     const front = dataUrlToParts(body.frontImage);
     const back = dataUrlToParts(body.backImage);
 
-    // Call Gemini Vision via Lovable AI for OCR + blur check using tool calling
     const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -104,16 +116,19 @@ Deno.serve(async (req) => {
       console.error("AI gateway error:", aiResp.status, t);
       if (aiResp.status === 429) {
         return new Response(JSON.stringify({ error: "AI rate limit exceeded. Please try again shortly." }), {
-          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 429,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       if (aiResp.status === 402) {
         return new Response(JSON.stringify({ error: "AI credits exhausted. Add funds in Workspace > Usage." }), {
-          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 402,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       return new Response(JSON.stringify({ error: "AI gateway failed" }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -121,47 +136,55 @@ Deno.serve(async (req) => {
     const toolCall = aiJson?.choices?.[0]?.message?.tool_calls?.[0];
     if (!toolCall) {
       return new Response(JSON.stringify({ error: "Failed to parse ID. Please retake clearer photos." }), {
-        status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 422,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
     const extracted = JSON.parse(toolCall.function.arguments);
 
     if (!extracted.looks_like_philid) {
       return new Response(JSON.stringify({ error: "This does not appear to be a Philippine National ID." }), {
-        status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 422,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
     if (!extracted.quality_ok) {
       return new Response(JSON.stringify({
         error: extracted.quality_issue || "Image too blurred. Please retake.",
         retry: true,
       }), {
-        status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 422,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Upload images to private bucket using service role (so RLS doesn't block)
     const admin = createClient(SUPABASE_URL, SERVICE);
     const ts = Date.now();
     const frontPath = `${user.id}/${ts}-front.jpg`;
     const backPath = `${user.id}/${ts}-back.jpg`;
-
     const decode = (b64: string) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
 
-    const up1 = await admin.storage.from("id-documents").upload(frontPath, decode(front.b64), {
-      contentType: front.mime, upsert: true,
-    });
-    const up2 = await admin.storage.from("id-documents").upload(backPath, decode(back.b64), {
-      contentType: back.mime, upsert: true,
-    });
+    const [up1, up2] = await Promise.all([
+      admin.storage.from("id-documents").upload(frontPath, decode(front.b64), {
+        contentType: front.mime,
+        upsert: true,
+      }),
+      admin.storage.from("id-documents").upload(backPath, decode(back.b64), {
+        contentType: back.mime,
+        upsert: true,
+      }),
+    ]);
+
     if (up1.error || up2.error) {
       console.error("upload err", up1.error, up2.error);
       return new Response(JSON.stringify({ error: "Failed to store ID images." }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Upsert verification row (status reset to pending)
     const { error: vErr } = await admin.from("verifications").upsert({
       user_id: user.id,
       status: "pending",
@@ -180,8 +203,9 @@ Deno.serve(async (req) => {
 
     if (vErr) {
       console.error("db err", vErr);
-      return new Response(JSON.stringify({ error: "Failed to save submission: " + vErr.message }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      return new Response(JSON.stringify({ error: `Failed to save submission: ${vErr.message}` }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -194,11 +218,14 @@ Deno.serve(async (req) => {
         psn: extracted.psn,
         address: extracted.address,
       },
-    }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (e) {
     console.error("verify-id-ocr error", e);
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });
