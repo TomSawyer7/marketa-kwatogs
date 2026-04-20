@@ -29,12 +29,15 @@ export function VerificationGate({ children }: { children: ReactNode }) {
   // Not logged in: let public marketplace pages render — Sell/Saved/etc. already protected by ProtectedRoute.
   if (!user) return <>{children}</>;
 
+  // Admins bypass verification entirely
+  if (isAdmin) {
+    if (path === VERIFY_PATH) return <Navigate to={ADMIN_PATH} replace />;
+    return <>{children}</>;
+  }
+
   // Logged in but unverified
   if (!isVerified) {
-    const allowed =
-      path === VERIFY_PATH ||
-      ALWAYS_ALLOWED.includes(path) ||
-      (isAdmin && path.startsWith(ADMIN_PATH));
+    const allowed = path === VERIFY_PATH || ALWAYS_ALLOWED.includes(path);
     if (!allowed) return <Navigate to={VERIFY_PATH} replace />;
   }
 
