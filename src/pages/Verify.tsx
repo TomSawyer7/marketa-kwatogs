@@ -206,7 +206,10 @@ function Step1Upload({ onSubmitted, previousNotes }: { onSubmitted: () => void; 
     if (!front || !back) return;
     setSubmitting(true); setServerError(null);
     try {
-      const [frontData, backData] = await Promise.all([fileToDataUrl(front), fileToDataUrl(back)]);
+      const [frontData, backData] = await Promise.all([
+        compressImageToDataUrl(front, 1280, 0.75),
+        compressImageToDataUrl(back, 1280, 0.75),
+      ]);
       const { data, error } = await supabase.functions.invoke("verify-id-ocr", {
         body: { frontImage: frontData, backImage: backData },
       });
