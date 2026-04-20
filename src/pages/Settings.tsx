@@ -8,16 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useMarketa } from "@/store/marketa";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
-import { Camera, ArrowLeft, Trash2, LogOut } from "lucide-react";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+import { Camera, ArrowLeft, LogOut } from "lucide-react";
 
 const profileSchema = z.object({
   name: z.string().trim().min(2, "Name must be at least 2 characters").max(60),
