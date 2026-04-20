@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 const ItemDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { getListing, getSeller, isSaved, toggleSave, deleteListing } = useMarketa();
+  const { getListing, getSeller, isSaved, toggleSave, deleteListing, currentUserId } = useMarketa();
   const [imgIndex, setImgIndex] = useState(0);
   const [message, setMessage] = useState("");
 
@@ -36,7 +36,7 @@ const ItemDetail = () => {
 
   const seller = getSeller(listing.sellerId);
   const saved = isSaved(listing.id);
-  const isMine = listing.sellerId === "u_me";
+  const isMine = !!currentUserId && listing.sellerId === currentUserId;
   const category = CATEGORIES.find((c) => c.slug === listing.category);
 
   const onSendMessage = () => {
@@ -45,8 +45,8 @@ const ItemDetail = () => {
     setMessage("");
   };
 
-  const onDelete = () => {
-    deleteListing(listing.id);
+  const onDelete = async () => {
+    await deleteListing(listing.id);
     toast.success("Listing deleted");
     navigate("/profile");
   };

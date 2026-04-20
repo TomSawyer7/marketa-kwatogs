@@ -28,10 +28,11 @@ const profileSchema = z.object({
 
 const Settings = () => {
   const navigate = useNavigate();
-  const { profile, updateProfile, myListings } = useMarketa();
+  const { profile, updateProfile } = useMarketa();
   const { user, signOut } = useAuth();
   const [form, setForm] = useState(profile);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
 
   // Keep form in sync with profile (e.g., when Supabase profile loads after auth)
   useEffect(() => { setForm(profile); }, [profile]);
@@ -58,7 +59,7 @@ const Settings = () => {
     e.target.value = "";
   };
 
-  const onSubmit = (e: FormEvent) => {
+  const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const parsed = profileSchema.safeParse({
       name: form.name, email: form.email, location: form.location, bio: form.bio,
@@ -73,16 +74,13 @@ const Settings = () => {
       toast.error("Please fix the highlighted fields.");
       return;
     }
-    updateProfile(form);
-    toast.success("Settings saved");
-  };
-
-  const onResetData = () => {
-    localStorage.removeItem("marketa.userListings");
-    localStorage.removeItem("marketa.saved");
-    localStorage.removeItem("marketa.profile");
-    toast.success("Local data cleared. Reloading...");
-    setTimeout(() => window.location.assign("/"), 600);
+    setSaving(true);
+    try {
+      await updateProfile(form);
+      toast.success("Settings saved");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (

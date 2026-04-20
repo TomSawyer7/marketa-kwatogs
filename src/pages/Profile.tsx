@@ -9,8 +9,8 @@ import { useMarketa } from "@/store/marketa";
 import { Plus, Settings, MapPin, Calendar, ShieldCheck, Bookmark, Store } from "lucide-react";
 
 const Profile = () => {
-  const { profile, myListings, listings, saved, getSeller } = useMarketa();
-  const me = getSeller("u_me");
+  const { profile, myListings, listings, saved, getSeller, currentUserId } = useMarketa();
+  const me = currentUserId ? getSeller(currentUserId) : getSeller("u_me");
   const savedItems = saved.map((id) => listings.find((l) => l.id === id)).filter(Boolean) as typeof listings;
 
   return (
