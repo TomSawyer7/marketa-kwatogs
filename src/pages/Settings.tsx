@@ -182,8 +182,8 @@ const Settings = () => {
           </section>
 
           <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
-            <Button type="button" variant="ghost" onClick={() => setForm(profile)}>Reset</Button>
-            <Button type="submit">Save changes</Button>
+            <Button type="button" variant="ghost" onClick={() => setForm(profile)} disabled={saving}>Reset</Button>
+            <Button type="submit" disabled={saving}>{saving ? "Saving..." : "Save changes"}</Button>
           </div>
         </form>
 
@@ -198,38 +198,6 @@ const Settings = () => {
             </Button>
           </section>
         )}
-
-        <Separator className="my-8" />
-
-        {/* Danger zone */}
-        <section className="bg-card border border-destructive/30 rounded-lg p-5 md:p-6">
-          <h3 className="font-semibold text-lg text-destructive">Danger zone</h3>
-          <p className="text-sm text-muted-foreground mt-1">
-            Clear all locally stored data — your profile, your {myListings.length} {myListings.length === 1 ? "listing" : "listings"}, and saved items.
-          </p>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="outline" className="mt-3 gap-2 text-destructive hover:text-destructive border-destructive/30">
-                <Trash2 className="h-4 w-4" /> Reset Marketa data
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Reset all local data?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This removes your profile changes, your listings, and saved items from this device. This cannot be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={onResetData}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                >Reset everything</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </section>
       </div>
     </AppShell>
   );
