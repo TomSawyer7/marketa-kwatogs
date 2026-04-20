@@ -189,6 +189,18 @@ const Settings = () => {
           </div>
         </form>
 
+        {user && (
+          <section className="mt-6 bg-card border border-border rounded-lg p-5 md:p-6 flex items-center justify-between gap-4">
+            <div>
+              <h3 className="font-semibold">Session</h3>
+              <p className="text-sm text-muted-foreground">Signed in as {user.email}.</p>
+            </div>
+            <Button variant="outline" onClick={onLogout} className="gap-2">
+              <LogOut className="h-4 w-4" /> Log out
+            </Button>
+          </section>
+        )}
+
         <Separator className="my-8" />
 
         {/* Danger zone */}
