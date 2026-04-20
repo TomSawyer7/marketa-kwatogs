@@ -11,8 +11,9 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useMarketa } from "@/store/marketa";
+import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
-import { Camera, ArrowLeft, Trash2 } from "lucide-react";
+import { Camera, ArrowLeft, Trash2, LogOut } from "lucide-react";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
@@ -28,6 +29,7 @@ const profileSchema = z.object({
 const Settings = () => {
   const navigate = useNavigate();
   const { profile, updateProfile, myListings } = useMarketa();
+  const { user, signOut } = useAuth();
   const [form, setForm] = useState(profile);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
