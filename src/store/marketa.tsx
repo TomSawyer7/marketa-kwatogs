@@ -16,7 +16,7 @@ type Profile = {
 const DEFAULT_PROFILE: Profile = {
   name: "You",
   email: "you@marketa.app",
-  location: "Brooklyn, NY",
+  location: "Makati, Metro Manila",
   bio: "Casual seller — clearing space.",
   avatar: "https://api.dicebear.com/7.x/initials/svg?seed=You&backgroundColor=1877f2",
   notifications: { messages: true, deals: true, newsletter: false },
