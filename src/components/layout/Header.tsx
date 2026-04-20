@@ -30,8 +30,8 @@ export function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-40 h-[var(--header-h)] bg-card border-b border-border">
-      <div className="h-full px-3 md:px-5 grid grid-cols-[auto_1fr_auto] items-center gap-3">
+    <header className="sticky top-0 z-40 bg-card border-b border-border">
+      <div className="h-[var(--header-h)] px-3 md:px-5 grid grid-cols-[auto_1fr_auto] items-center gap-3">
         {/* Left: brand + search */}
         <div className="flex items-center gap-2 min-w-0">
           <Link to="/" className="flex items-center gap-2 shrink-0">
