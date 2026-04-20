@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { z } from "zod";
 import { AppShell } from "@/components/layout/AppShell";
@@ -33,9 +33,18 @@ const Settings = () => {
   const [form, setForm] = useState(profile);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // Keep form in sync with profile (e.g., when Supabase profile loads after auth)
+  useEffect(() => { setForm(profile); }, [profile]);
+
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => {
     setForm((f) => ({ ...f, [k]: v }));
     setErrors((e) => ({ ...e, [k as string]: "" }));
+  };
+
+  const onLogout = async () => {
+    await signOut();
+    toast.success("Logged out");
+    navigate("/");
   };
 
   const onAvatar = (e: ChangeEvent<HTMLInputElement>) => {
