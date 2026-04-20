@@ -22,7 +22,7 @@ const BLUR_THRESHOLD = 60;
 
 const Verify = () => {
   const navigate = useNavigate();
-  const { user, isVerified, signOut, refreshStatus } = useAuth();
+  const { user, isVerified, isAdmin, signOut, refreshStatus } = useAuth();
   const [verif, setVerif] = useState<VerifRow | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -33,8 +33,10 @@ const Verify = () => {
   useEffect(() => {
     if (!user) {
       navigate("/auth", { state: { from: "/verify" }, replace: true });
+    } else if (isAdmin) {
+      navigate("/admin", { replace: true });
     }
-  }, [user, navigate]);
+  }, [user, isAdmin, navigate]);
 
   const loadStatus = async () => {
     if (!user) return;
