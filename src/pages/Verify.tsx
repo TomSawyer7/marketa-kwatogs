@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
-import { estimateBlurScore, compressImageToDataUrl } from "@/lib/image-quality";
+import { estimateBlurScore, compressImageToDataUrl, dataUrlSizeBytes } from "@/lib/image-quality";
 
 type VerifRow = {
   status: "pending" | "id_approved" | "verified" | "rejected" | null;
@@ -19,6 +19,26 @@ type VerifRow = {
 };
 
 const BLUR_THRESHOLD = 60;
+const MAX_ORIGINAL_IMAGE_BYTES = 8 * 1024 * 1024;
+const MAX_EDGE_IMAGE_BYTES = 110 * 1024;
+const MAX_EDGE_REQUEST_BYTES = 320 * 1024;
+
+async function prepareIdImageForUpload(file: File) {
+  return compressImageToDataUrl(file, {
+    maxDim: 840,
+    quality: 0.68,
+    maxBytes: MAX_EDGE_IMAGE_BYTES,
+    minDim: 520,
+    minQuality: 0.34,
+  });
+}
+
+function getIdUploadErrorMessage(message: string) {
+  if (message.includes("Failed to send a request to the Edge Function")) {
+    return "These photos are still too large to upload. Crop closer to the ID or retake them with a lower camera resolution.";
+  }
+  return message;
+}
 
 const Verify = () => {
   const navigate = useNavigate();
@@ -179,7 +199,7 @@ function Step1Upload({ onSubmitted, previousNotes }: { onSubmitted: () => void; 
       toast.error("Please choose an image file.");
       return;
     }
-    if (file.size > 8 * 1024 * 1024) {
+    if (file.size > MAX_ORIGINAL_IMAGE_BYTES) {
       toast.error("Image must be under 8 MB.");
       return;
     }
@@ -208,15 +228,24 @@ function Step1Upload({ onSubmitted, previousNotes }: { onSubmitted: () => void; 
     if (!front || !back) return;
     setSubmitting(true); setServerError(null);
     try {
-      const [frontData, backData] = await Promise.all([
-        compressImageToDataUrl(front, { maxDim: 960, quality: 0.72, maxBytes: 180 * 1024 }),
-        compressImageToDataUrl(back, { maxDim: 960, quality: 0.72, maxBytes: 180 * 1024 }),
-      ]);
+      const [frontData, backData] = await Promise.all([prepareIdImageForUpload(front), prepareIdImageForUpload(back)]);
+      const payload = { frontImage: frontData, backImage: backData };
+      const requestBytes = new Blob([JSON.stringify(payload)]).size;
+      if (
+        dataUrlSizeBytes(frontData) > MAX_EDGE_IMAGE_BYTES ||
+        dataUrlSizeBytes(backData) > MAX_EDGE_IMAGE_BYTES ||
+        requestBytes > MAX_EDGE_REQUEST_BYTES
+      ) {
+        const msg = "These photos are too large to upload. Crop closer to the ID or retake them with a lower camera resolution.";
+        setServerError(msg);
+        toast.error(msg);
+        return;
+      }
       const { data, error } = await supabase.functions.invoke("verify-id-ocr", {
-        body: { frontImage: frontData, backImage: backData },
+        body: payload,
       });
       if (error) {
-        const msg = (data as { error?: string } | undefined)?.error ?? error.message ?? "Submission failed.";
+        const msg = getIdUploadErrorMessage((data as { error?: string } | undefined)?.error ?? error.message ?? "Submission failed.");
         setServerError(msg);
         toast.error(msg);
         return;
@@ -224,7 +253,7 @@ function Step1Upload({ onSubmitted, previousNotes }: { onSubmitted: () => void; 
       toast.success("ID submitted. Awaiting admin review.");
       onSubmitted();
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Submission failed.";
+      const msg = getIdUploadErrorMessage(e instanceof Error ? e.message : "Submission failed.");
       setServerError(msg);
       toast.error(msg);
     } finally {
