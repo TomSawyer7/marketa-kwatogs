@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
-import { estimateBlurScore, fileToDataUrl } from "@/lib/image-quality";
+import { estimateBlurScore, compressImageToDataUrl } from "@/lib/image-quality";
 
 type VerifRow = {
   status: "pending" | "id_approved" | "verified" | "rejected" | null;
@@ -206,7 +206,10 @@ function Step1Upload({ onSubmitted, previousNotes }: { onSubmitted: () => void; 
     if (!front || !back) return;
     setSubmitting(true); setServerError(null);
     try {
-      const [frontData, backData] = await Promise.all([fileToDataUrl(front), fileToDataUrl(back)]);
+      const [frontData, backData] = await Promise.all([
+        compressImageToDataUrl(front, 1280, 0.75),
+        compressImageToDataUrl(back, 1280, 0.75),
+      ]);
       const { data, error } = await supabase.functions.invoke("verify-id-ocr", {
         body: { frontImage: frontData, backImage: backData },
       });
