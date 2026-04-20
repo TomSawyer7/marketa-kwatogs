@@ -8,7 +8,9 @@ import { useMarketa } from "@/store/marketa";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { MapPin } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { MapPin, SlidersHorizontal } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const Index = () => {
   const { listings } = useMarketa();
@@ -51,15 +53,38 @@ const Index = () => {
 
   const activeCategory = CATEGORIES.find((c) => c.slug === cat) ?? CATEGORIES[0];
   const heading = cat === "all" ? "Today's picks" : activeCategory.name;
-  const hasFilters = Boolean(minPrice || maxPrice || loc);
+  const activeFilterCount = [minPrice, maxPrice, loc].filter(Boolean).length;
 
   return (
     <AppShell>
       <div className="px-4 md:px-6 lg:px-8 py-5 md:py-6">
-        <div className="grid grid-cols-1 md:grid-cols-[240px_minmax(0,1fr)] gap-5 md:gap-6">
-          {/* Compact location/filter card */}
-          <aside className="md:sticky md:top-[calc(var(--header-h)+64px)] md:self-start">
-            <div className="bg-card border border-border rounded-lg p-4 space-y-4">
+        <div className="flex items-end justify-between gap-3 mb-4 flex-wrap">
+          <div>
+            <h2 className="text-2xl md:text-3xl font-bold tracking-tight">{heading}</h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              {results.length} {results.length === 1 ? "item" : "items"}
+              {q && <> · "<span className="text-foreground font-medium">{q}</span>"</>}
+            </p>
+          </div>
+
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="rounded-full gap-2 h-10">
+                <SlidersHorizontal className="h-4 w-4" />
+                Filters
+                {activeFilterCount > 0 && (
+                  <span
+                    className={cn(
+                      "ml-1 h-5 min-w-5 px-1.5 grid place-items-center rounded-full",
+                      "bg-primary text-primary-foreground text-xs font-semibold",
+                    )}
+                  >
+                    {activeFilterCount}
+                  </span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-80 p-4 space-y-4">
               <div className="flex items-center gap-2">
                 <MapPin className="h-4 w-4 text-primary" />
                 <h3 className="font-semibold text-sm">Location</h3>
@@ -84,37 +109,26 @@ const Index = () => {
                 </div>
               </div>
 
-              {hasFilters && (
+              {activeFilterCount > 0 && (
                 <Button variant="outline" size="sm" onClick={clearFilters} className="w-full">
                   Clear filters
                 </Button>
               )}
-            </div>
-          </aside>
-
-          {/* Results */}
-          <section className="min-w-0">
-            <div className="flex items-end justify-between gap-3 mb-4">
-              <h2 className="text-2xl md:text-3xl font-bold tracking-tight">{heading}</h2>
-              <span className="text-sm text-muted-foreground">
-                {results.length} {results.length === 1 ? "item" : "items"}
-                {q && <> · “<span className="text-foreground font-medium">{q}</span>”</>}
-              </span>
-            </div>
-
-            {results.length === 0 ? (
-              <EmptyState
-                title="No listings found"
-                description="Try adjusting your search, category, or filters."
-                action={<Button asChild variant="outline"><Link to="/">Reset</Link></Button>}
-              />
-            ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
-                {results.map((l) => <ListingCard key={l.id} listing={l} />)}
-              </div>
-            )}
-          </section>
+            </PopoverContent>
+          </Popover>
         </div>
+
+        {results.length === 0 ? (
+          <EmptyState
+            title="No listings found"
+            description="Try adjusting your search, category, or filters."
+            action={<Button asChild variant="outline"><Link to="/">Reset</Link></Button>}
+          />
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-4">
+            {results.map((l) => <ListingCard key={l.id} listing={l} />)}
+          </div>
+        )}
       </div>
     </AppShell>
   );
