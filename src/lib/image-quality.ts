@@ -56,28 +56,74 @@ export async function fileToDataUrl(file: File | Blob): Promise<string> {
 }
 
 /**
- * Compress/downscale an image file to a JPEG data URL.
- * Keeps the longest side ≤ maxDim and uses the given quality (0–1).
+ * Estimates the decoded size of a base64 data URL in bytes.
+ */
+export function dataUrlSizeBytes(dataUrl: string): number {
+  const base64 = dataUrl.split(",")[1] ?? "";
+  return Math.ceil((base64.length * 3) / 4);
+}
+
+/**
+ * Compress/downscale an image to a JPEG data URL and keep shrinking it
+ * until it fits under the target byte size.
  */
 export async function compressImageToDataUrl(
-  file: File | Blob,
-  maxDim = 1200,
-  quality = 0.75,
+  source: File | Blob | string,
+  options?: {
+    maxDim?: number;
+    quality?: number;
+    maxBytes?: number;
+    minDim?: number;
+    minQuality?: number;
+  },
 ): Promise<string> {
-  const url = URL.createObjectURL(file);
+  const {
+    maxDim = 960,
+    quality = 0.72,
+    maxBytes = 180 * 1024,
+    minDim = 640,
+    minQuality = 0.42,
+  } = options ?? {};
+
+  const objectUrl = typeof source === "string" ? null : URL.createObjectURL(source);
+  const src = typeof source === "string" ? source : objectUrl!;
+
   try {
-    const img = await loadImage(url);
-    const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
-    const w = Math.round(img.width * scale);
-    const h = Math.round(img.height * scale);
-    const canvas = document.createElement("canvas");
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext("2d")!;
-    ctx.drawImage(img, 0, 0, w, h);
-    return canvas.toDataURL("image/jpeg", quality);
+    const img = await loadImage(src);
+    let currentDim = Math.min(maxDim, Math.max(img.width, img.height));
+    let currentQuality = quality;
+
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const scale = Math.min(1, currentDim / Math.max(img.width, img.height));
+      const w = Math.max(320, Math.round(img.width * scale));
+      const h = Math.max(320, Math.round(img.height * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(img, 0, 0, w, h);
+
+      const dataUrl = canvas.toDataURL("image/jpeg", currentQuality);
+      if (dataUrlSizeBytes(dataUrl) <= maxBytes) return dataUrl;
+
+      if (currentQuality > minQuality) {
+        currentQuality = Math.max(minQuality, currentQuality - 0.08);
+      } else if (currentDim > minDim) {
+        currentDim = Math.max(minDim, Math.round(currentDim * 0.82));
+      } else {
+        return dataUrl;
+      }
+    }
+
+    const fallbackCanvas = document.createElement("canvas");
+    const fallbackScale = Math.min(1, minDim / Math.max(img.width, img.height));
+    fallbackCanvas.width = Math.max(320, Math.round(img.width * fallbackScale));
+    fallbackCanvas.height = Math.max(320, Math.round(img.height * fallbackScale));
+    const fallbackCtx = fallbackCanvas.getContext("2d")!;
+    fallbackCtx.drawImage(img, 0, 0, fallbackCanvas.width, fallbackCanvas.height);
+    return fallbackCanvas.toDataURL("image/jpeg", minQuality);
   } finally {
-    URL.revokeObjectURL(url);
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
   }
 }
 

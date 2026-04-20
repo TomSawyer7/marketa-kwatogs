@@ -207,14 +207,13 @@ function Step1Upload({ onSubmitted, previousNotes }: { onSubmitted: () => void; 
     setSubmitting(true); setServerError(null);
     try {
       const [frontData, backData] = await Promise.all([
-        compressImageToDataUrl(front, 1280, 0.75),
-        compressImageToDataUrl(back, 1280, 0.75),
+        compressImageToDataUrl(front, { maxDim: 960, quality: 0.72, maxBytes: 180 * 1024 }),
+        compressImageToDataUrl(back, { maxDim: 960, quality: 0.72, maxBytes: 180 * 1024 }),
       ]);
       const { data, error } = await supabase.functions.invoke("verify-id-ocr", {
         body: { frontImage: frontData, backImage: backData },
       });
       if (error) {
-        // edge function returned non-2xx — error.message is generic; pull body
         const msg = (data as { error?: string } | undefined)?.error ?? error.message ?? "Submission failed.";
         setServerError(msg);
         toast.error(msg);
@@ -386,14 +385,20 @@ function Step2Liveness({ onPassed }: { onPassed: () => void }) {
 
   useEffect(() => () => stopCamera(), []);
 
-  const captureFrame = (): string | null => {
+  const captureFrame = async (): Promise<string | null> => {
     const v = videoRef.current;
     if (!v || !v.videoWidth) return null;
     const c = document.createElement("canvas");
     c.width = v.videoWidth; c.height = v.videoHeight;
     const ctx = c.getContext("2d")!;
     ctx.drawImage(v, 0, 0);
-    return c.toDataURL("image/jpeg", 0.85);
+    return compressImageToDataUrl(c.toDataURL("image/jpeg", 0.82), {
+      maxDim: 640,
+      quality: 0.62,
+      maxBytes: 90 * 1024,
+      minDim: 420,
+      minQuality: 0.4,
+    });
   };
 
   const runCapture = async () => {
@@ -404,7 +409,7 @@ function Step2Liveness({ onPassed }: { onPassed: () => void }) {
     for (let i = 3; i > 0; i--) {
       setCountdown(i);
       await new Promise((r) => setTimeout(r, 1200));
-      const f = captureFrame();
+      const f = await captureFrame();
       if (f) frames.push(f);
     }
     setCountdown(0);
