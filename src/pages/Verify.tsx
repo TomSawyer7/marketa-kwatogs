@@ -11,9 +11,20 @@ import { estimateBlurScore, compressImageToDataUrl, dataUrlSizeBytes } from "@/l
 type VerifRow = {
   status: "pending" | "id_approved" | "verified" | "rejected" | null;
   ocr_full_name: string | null;
+  ocr_first_name: string | null;
+  ocr_middle_name: string | null;
+  ocr_last_name: string | null;
   ocr_date_of_birth: string | null;
   ocr_gender: string | null;
+  ocr_sex: string | null;
   ocr_psn: string | null;
+  ocr_document_number: string | null;
+  ocr_nationality: string | null;
+  ocr_address: string | null;
+  ocr_place_of_birth: string | null;
+  ocr_blood_type: string | null;
+  ocr_marital_status: string | null;
+  ocr_date_of_issue: string | null;
   admin_notes: string | null;
   face_match_score: number | null;
 };
