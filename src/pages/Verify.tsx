@@ -11,9 +11,20 @@ import { estimateBlurScore, compressImageToDataUrl, dataUrlSizeBytes } from "@/l
 type VerifRow = {
   status: "pending" | "id_approved" | "verified" | "rejected" | null;
   ocr_full_name: string | null;
+  ocr_first_name: string | null;
+  ocr_middle_name: string | null;
+  ocr_last_name: string | null;
   ocr_date_of_birth: string | null;
   ocr_gender: string | null;
+  ocr_sex: string | null;
   ocr_psn: string | null;
+  ocr_document_number: string | null;
+  ocr_nationality: string | null;
+  ocr_address: string | null;
+  ocr_place_of_birth: string | null;
+  ocr_blood_type: string | null;
+  ocr_marital_status: string | null;
+  ocr_date_of_issue: string | null;
   admin_notes: string | null;
   face_match_score: number | null;
 };
@@ -62,10 +73,15 @@ const Verify = () => {
     if (!user) return;
     const { data } = await supabase
       .from("verifications")
-      .select("status, ocr_full_name, ocr_date_of_birth, ocr_gender, ocr_psn, admin_notes, face_match_score")
+      .select("status, ocr_full_name, ocr_first_name, ocr_middle_name, ocr_last_name, ocr_date_of_birth, ocr_gender, ocr_sex, ocr_psn, ocr_document_number, ocr_nationality, ocr_address, ocr_place_of_birth, ocr_blood_type, ocr_marital_status, ocr_date_of_issue, admin_notes, face_match_score")
       .eq("user_id", user.id)
       .maybeSingle();
-    setVerif((data as VerifRow) ?? { status: null, ocr_full_name: null, ocr_date_of_birth: null, ocr_gender: null, ocr_psn: null, admin_notes: null, face_match_score: null });
+    setVerif((data as VerifRow) ?? {
+      status: null, ocr_full_name: null, ocr_first_name: null, ocr_middle_name: null, ocr_last_name: null,
+      ocr_date_of_birth: null, ocr_gender: null, ocr_sex: null, ocr_psn: null, ocr_document_number: null,
+      ocr_nationality: null, ocr_address: null, ocr_place_of_birth: null, ocr_blood_type: null,
+      ocr_marital_status: null, ocr_date_of_issue: null, admin_notes: null, face_match_score: null,
+    });
     setLoading(false);
   };
 
@@ -361,9 +377,19 @@ function PendingPanel({ verif }: { verif: VerifRow }) {
       <div className="mt-5 text-left bg-secondary/50 rounded-lg p-4 text-sm space-y-1.5">
         <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Extracted details</p>
         <Field label="Full name" value={verif.ocr_full_name} />
-        <Field label="Date of birth" value={verif.ocr_date_of_birth} />
-        <Field label="Gender" value={verif.ocr_gender} />
+        <Field label="First name" value={verif.ocr_first_name} />
+        <Field label="Middle name" value={verif.ocr_middle_name} />
+        <Field label="Last name" value={verif.ocr_last_name} />
+        <Field label="Document number" value={verif.ocr_document_number} />
         <Field label="PSN" value={verif.ocr_psn} />
+        <Field label="Date of birth" value={verif.ocr_date_of_birth} />
+        <Field label="Sex" value={verif.ocr_sex ?? verif.ocr_gender} />
+        <Field label="Nationality" value={verif.ocr_nationality} />
+        <Field label="Place of birth" value={verif.ocr_place_of_birth} />
+        <Field label="Address" value={verif.ocr_address} />
+        <Field label="Blood type" value={verif.ocr_blood_type} />
+        <Field label="Marital status" value={verif.ocr_marital_status} />
+        <Field label="Date of issue" value={verif.ocr_date_of_issue} />
       </div>
     </section>
   );
