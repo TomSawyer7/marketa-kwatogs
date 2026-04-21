@@ -123,6 +123,13 @@ Deno.serve(async (req) => {
     form.append("file_back", b64ToBlob(back.b64, back.mime), "back.jpg");
     form.append("accuracy", "2");
     form.append("authenticate", "false");
+    // Request the full extended dataset (middle name, sex, place of birth,
+    // marital status, blood type, etc.) — without these the basic v1 response
+    // omits those fields even when present on the ID.
+    form.append("chkservice", "mrz,face,docusign");
+    form.append("vault_save", "true");
+    form.append("verbose", "2");
+    form.append("get_contract", "false");
 
     const idaResp = await fetch("https://api.idanalyzer.com/", {
       method: "POST",
