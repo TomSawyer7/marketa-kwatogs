@@ -1,203 +1,39 @@
 
-## Connect Marketa login/sign-up to your Supabase project
 
-I’ll connect the app to your existing Supabase project:
+## Goal
+Fix the verify-id-ocr edge function so extracted ID fields display as clean values (not raw JSON arrays) by mirroring your working test app's IDAnalyzer v2 integration.
 
-```text
-Supabase URL: https://gsawquzxlrkraylbyitt.supabase.co
-Auth key: anon/public key provided
-```
+## Root cause
+IDAnalyzer v2 `/scan` returns each field as `[{value, confidence, source}, ...]` (an array of detection objects), not plain strings. The current edge function passes those arrays straight into the DB, so the Verify screen renders the raw JSON. Several v2 field names (e.g. `birthDate`, `sex`) are also missing from the lookup list, which is why DOB and Gender are blank.
 
-The key you shared is the Supabase **anon/public** key, which is safe to use in a frontend app as long as Row Level Security is enabled.
+## What we'll do (after you approve)
 
-## What will be built
+1. **Unzip and read your working app**
+   Extract `Marketplace_Verification_System.zip` to inspect `app.js`, `index.html`, `style.css` and copy:
+   - The exact endpoint, profile, and request body shape you call
+   - The exact response field names and the unwrap logic you use
+   - Any pre/post-processing (resize, JPEG compress, base64 strip)
 
-### 1. Supabase client setup
+2. **Rewrite `supabase/functions/verify-id-ocr/index.ts`**
+   - Add a `valueOf()` helper that handles all three shapes: plain string, `{value}`, and `[{value}, ...]` (picks highest-confidence entry).
+   - Expand field lookups to cover v2 names: `firstName`/`given_name`, `lastName`/`surname`, `documentNumber`, `birthDate`/`dob`, `sex`/`gender`, `nationality`, `address1`/`address`, `placeOfBirth`, `issued`/`dateOfIssue`, etc.
+   - Match the request shape (profile + base64) to your working app's call so extraction quality matches what you saw working.
+   - Keep storing the raw IDAnalyzer JSON in a debug log line so we can verify field names in function logs.
 
-Add Supabase support to the app:
+3. **Patch the Verify screen render**
+   Defensive fallback in `src/pages/Verify.tsx` so even if a stored value is a stringified array, it renders as text (prevents the `[{"value":"…"}]` UI bug from recurring on old rows).
 
-- Install `@supabase/supabase-js`
-- Create `src/integrations/supabase/client.ts`
-- Store the Supabase URL and anon key in the client setup
-- Add a typed placeholder file for future generated database types
+4. **Redeploy & test**
+   - Deploy `verify-id-ocr`.
+   - You retry Step 1; we read the function logs to confirm clean extraction.
+   - Verify the screen shows: Full name, DOB, Gender (Sex), Document number, Address — all as plain text.
 
-### 2. Authentication system
+## Files changed
+- `supabase/functions/verify-id-ocr/index.ts` (rewrite OCR parsing)
+- `src/pages/Verify.tsx` (defensive render of OCR fields)
 
-Create a reusable auth provider:
+## Out of scope
+- Step 2 liveness (unchanged, per your earlier decision)
+- Admin UI changes (already shows the rich fields)
+- DB schema (no migration needed — columns already exist)
 
-- New `src/hooks/use-auth.tsx`
-- Tracks:
-  - current user
-  - current session
-  - loading state
-  - sign in
-  - sign up
-  - sign out
-- Uses Supabase best practice:
-  - register `onAuthStateChange` first
-  - then call `getSession()`
-
-### 3. Login / sign-up page
-
-Add a new `/auth` page with a clean Marketa-style card:
-
-- Tabs for **Log in** and **Sign up**
-- Email/password login
-- Sign-up with:
-  - full name
-  - email
-  - password
-  - confirm password
-- Zod validation
-- Friendly toast messages
-- Redirect logged-in users back to the marketplace/profile flow
-
-### 4. Protected routes
-
-Protect pages that require an account:
-
-- `/sell`
-- `/saved`
-- `/profile`
-- `/settings`
-
-Public pages stay open:
-
-- `/`
-- `/item/:id`
-- `/seller/:id`
-- `/auth`
-
-If a logged-out user clicks Sell, Saved, Profile, or Settings, they will be sent to `/auth`.
-
-### 5. Header updates
-
-Update the top navigation:
-
-Logged out:
-
-- Show **Log in** button
-- Keep browsing/search/category navigation available
-
-Logged in:
-
-- Show the user avatar
-- Add a dropdown menu with:
-  - Profile
-  - Settings
-  - Log out
-
-### 6. Supabase profiles table
-
-Because Marketa needs user profile/settings data, the database should include a `profiles` table connected to Supabase Auth.
-
-I’ll provide a SQL script for your Supabase SQL Editor that creates:
-
-- `public.profiles`
-- Row Level Security
-- policies
-- trigger to auto-create a profile after signup
-
-Planned schema:
-
-```sql
-profiles
-- id uuid primary key references auth.users(id) on delete cascade
-- name text
-- email text
-- location text
-- bio text
-- avatar_url text
-- visibility text default 'public'
-- notifications jsonb default '{"messages":true,"deals":true,"newsletter":false}'
-- created_at timestamptz default now()
-- updated_at timestamptz default now()
-```
-
-Security rules:
-
-- Users can read their own profile
-- Users can update only their own profile
-- Profile rows are automatically created on signup
-- No roles will be stored on the profile table
-
-### 7. Profile/settings sync
-
-Update Marketa’s existing profile system:
-
-- Logged-out/demo users can still use the current localStorage fallback
-- Logged-in users load profile data from Supabase
-- Settings page saves profile updates back to Supabase
-- Avatar, display name, location, bio, notifications, and visibility sync with the `profiles` table
-
-### 8. Keep listings local for now
-
-For this step, only authentication and profiles move to Supabase.
-
-Existing listing behavior remains localStorage-based:
-
-- create listings
-- edit listings
-- delete listings
-- saved items
-
-This keeps the connection smaller and safer. Listings and saved items can be migrated to Supabase in the next step.
-
-## Files to add
-
-- `src/integrations/supabase/client.ts`
-- `src/integrations/supabase/types.ts`
-- `src/hooks/use-auth.tsx`
-- `src/components/auth/ProtectedRoute.tsx`
-- `src/pages/Auth.tsx`
-
-## Files to update
-
-- `package.json`
-- lockfile
-- `src/App.tsx`
-- `src/components/layout/Header.tsx`
-- `src/store/marketa.tsx`
-- `src/pages/Settings.tsx`
-- `src/pages/Sell.tsx`
-
-Also fix the remaining label in the Sell page from:
-
-```text
-Price (USD)
-```
-
-to:
-
-```text
-Price (PHP)
-```
-
-## Supabase dashboard settings to check
-
-In your Supabase dashboard:
-
-1. Go to **Authentication → Providers → Email**
-2. For demo/testing, disable **Confirm email** if you want users to sign up and log in immediately
-3. Go to **Authentication → URL Configuration**
-4. Add the preview URL as an allowed redirect URL:
-
-```text
-https://id-preview--d2e6c658-84bf-42ac-8874-628be1dd1513.lovable.app
-```
-
-When the app is published later, add the published URL too.
-
-## Testing plan
-
-After implementation:
-
-1. Open `/auth`
-2. Create a new account
-3. Confirm the profile row appears in Supabase
-4. Log out
-5. Log back in
-6. Check protected routes redirect correctly
-7. Update profile/settings
-8. Refresh the page and confirm profile data persists from Supabase
-9. Verify Sell/Saved/Profile/Settings work only when logged in
