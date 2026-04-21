@@ -115,16 +115,16 @@ Deno.serve(async (req) => {
     const back = dataUrlToParts(body.backImage);
 
     // ---- Call IDAnalyzer v1 Core API (multipart) ----
-    // Mirrors the working test app: POST https://api.idanalyzer.com/ with
-    // apikey + file (front). Plain-string results in `data.result.*`.
-    // Mirror the working test app exactly: apikey + file + accuracy=2.
-    // Adding chkservice/verbose/vault_save changes the response shape and
-    // suppresses fields like sex/middleName/placeOfBirth on PhilSys IDs.
+    // verbose=2 returns the full field set (middleName, sex, placeOfBirth,
+    // bloodType, maritalStatus, dateOfIssue) but each field becomes an array
+    // of {value,confidence,source} entries — valueOf() unwraps them.
     const form = new FormData();
     form.append("apikey", IDANALYZER_API_KEY);
     form.append("file", b64ToBlob(front.b64, front.mime), "front.jpg");
     form.append("file_back", b64ToBlob(back.b64, back.mime), "back.jpg");
     form.append("accuracy", "2");
+    form.append("verbose", "2");
+    form.append("authenticate", "false");
 
     const idaResp = await fetch("https://api.idanalyzer.com/", {
       method: "POST",
