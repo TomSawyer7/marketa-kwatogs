@@ -34,15 +34,6 @@ const MAX_ORIGINAL_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_EDGE_IMAGE_BYTES = 110 * 1024;
 const MAX_EDGE_REQUEST_BYTES = 320 * 1024;
 
-async function prepareIdImageForUpload(file: File) {
-  return compressImageToDataUrl(file, {
-    maxDim: 840,
-    quality: 0.68,
-    maxBytes: MAX_EDGE_IMAGE_BYTES,
-    minDim: 520,
-    minQuality: 0.34,
-  });
-}
 
 function getIdUploadErrorMessage(message: string) {
   if (message.includes("Failed to send a request to the Edge Function")) {
