@@ -115,16 +115,15 @@ Deno.serve(async (req) => {
     const back = dataUrlToParts(body.backImage);
 
     // ---- Call IDAnalyzer v1 Core API (multipart) ----
-    // verbose=2 returns the full field set (middleName, sex, placeOfBirth,
-    // bloodType, maritalStatus, dateOfIssue) but each field becomes an array
-    // of {value,confidence,source} entries — valueOf() unwraps them.
+    // Mirror the working test app: send ONLY the front image with accuracy=2.
+    // No verbose, no file_back — that combination returns the rich PhilSys
+    // field set (middleName, sex, placeOfBirth, dateOfIssue, maritalStatus,
+    // bloodType) as plain strings. Adding file_back or verbose=2 changes the
+    // response shape and drops these extended fields for PhilSys IDs.
     const form = new FormData();
     form.append("apikey", IDANALYZER_API_KEY);
     form.append("file", b64ToBlob(front.b64, front.mime), "front.jpg");
-    form.append("file_back", b64ToBlob(back.b64, back.mime), "back.jpg");
     form.append("accuracy", "2");
-    form.append("verbose", "2");
-    form.append("authenticate", "false");
 
     const idaResp = await fetch("https://api.idanalyzer.com/", {
       method: "POST",
