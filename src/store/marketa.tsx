@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import type { Listing, Seller } from "@/lib/types";
+import type { Database } from "@/integrations/supabase/types";
 
 type Profile = {
   name: string;
@@ -267,7 +268,7 @@ export function MarketaProvider({ children }: { children: ReactNode }) {
 
   const updateListing: Ctx["updateListing"] = useCallback(async (id, patch) => {
     if (!user) return;
-    const dbPatch: Record<string, unknown> = {};
+    const dbPatch: Database["public"]["Tables"]["listings"]["Update"] = {};
     if (patch.title !== undefined) dbPatch.title = patch.title;
     if (patch.description !== undefined) dbPatch.description = patch.description;
     if (patch.category !== undefined) dbPatch.category = patch.category;
@@ -314,7 +315,7 @@ export function MarketaProvider({ children }: { children: ReactNode }) {
         const base = prev ?? DEFAULT_PROFILE;
         return { ...base, ...p, notifications: { ...base.notifications, ...(p.notifications ?? {}) } };
       });
-      const next = {
+      const next: Database["public"]["Tables"]["profiles"]["Update"] = {
         name: p.name,
         email: p.email,
         location: p.location,
@@ -324,7 +325,9 @@ export function MarketaProvider({ children }: { children: ReactNode }) {
         notifications: p.notifications,
         updated_at: new Date().toISOString(),
       };
-      const payload = Object.fromEntries(Object.entries(next).filter(([, v]) => v !== undefined));
+      const payload = Object.fromEntries(
+        Object.entries(next).filter(([, v]) => v !== undefined),
+      ) as Database["public"]["Tables"]["profiles"]["Update"];
       const { error } = await supabase.from("profiles").update(payload).eq("id", user.id);
       if (error) {
         toast.error("Couldn't save profile: " + error.message);
