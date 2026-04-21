@@ -92,14 +92,24 @@ export default function Landing() {
               re-authentication. No scammers — only trusted transactions.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <Button asChild size="lg" className="rounded-md h-12 px-6 bg-primary text-primary-foreground hover:bg-primary-hover">
-                <Link to={user ? "/browse" : "/auth"}>
-                  Get Started <ArrowRight className="h-4 w-4" />
-                </Link>
-              </Button>
-              <Button asChild variant="outline" size="lg" className="rounded-md h-12 px-6 bg-card border-primary/30 text-primary hover:bg-primary-soft">
-                <Link to={user ? "/browse" : "/auth"}>Sign In</Link>
-              </Button>
+              {user ? (
+                <Button asChild size="lg" className="rounded-md h-12 px-6 bg-primary text-primary-foreground hover:bg-primary-hover">
+                  <Link to="/browse">
+                    Enter market <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </Button>
+              ) : (
+                <>
+                  <Button asChild size="lg" className="rounded-md h-12 px-6 bg-primary text-primary-foreground hover:bg-primary-hover">
+                    <Link to="/auth">
+                      Get Started <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                  <Button asChild variant="outline" size="lg" className="rounded-md h-12 px-6 bg-card border-primary/30 text-primary hover:bg-primary-soft">
+                    <Link to="/auth">Sign In</Link>
+                  </Button>
+                </>
+              )}
             </div>
           </div>
 
