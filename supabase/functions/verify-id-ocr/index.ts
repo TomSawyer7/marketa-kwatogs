@@ -114,15 +114,16 @@ Deno.serve(async (req) => {
     const front = dataUrlToParts(body.frontImage);
     const back = dataUrlToParts(body.backImage);
 
-    // ---- Call IDAnalyzer v1 Core API (multipart) ----
-    // Mirror the working test app: send ONLY the front image with accuracy=2.
-    // No verbose, no file_back — that combination returns the rich PhilSys
-    // field set (middleName, sex, placeOfBirth, dateOfIssue, maritalStatus,
-    // bloodType) as plain strings. Adding file_back or verbose=2 changes the
-    // response shape and drops these extended fields for PhilSys IDs.
+    // ---- Call IDAnalyzer v2 /scan API (multipart) ----
+    // We need BOTH front and back so the QR barcode on the PhilSys back side
+    // is decoded. The QR contains a JSON payload with middleName, sex,
+    // placeOfBirth, blood type, dateOfIssue — fields that are NOT printed
+    // in OCR-readable text on the card. Profile "philsys" enables barcode
+    // decoding and returns rich field arrays of {value, confidence}.
     const form = new FormData();
     form.append("apikey", IDANALYZER_API_KEY);
     form.append("file", b64ToBlob(front.b64, front.mime), "front.jpg");
+    form.append("file_back", b64ToBlob(back.b64, back.mime), "back.jpg");
     form.append("accuracy", "2");
 
     const idaResp = await fetch("https://api.idanalyzer.com/", {
