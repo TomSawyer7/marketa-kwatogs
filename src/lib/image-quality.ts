@@ -65,7 +65,8 @@ export function dataUrlSizeBytes(dataUrl: string): number {
 
 /**
  * Compress/downscale an image to a JPEG data URL and keep shrinking it
- * until it fits under the target byte size.
+ * until it fits under the target byte size. Auto-corrects EXIF orientation
+ * and optionally applies an additional rotation (0/90/180/270).
  */
 export async function compressImageToDataUrl(
   source: File | Blob | string,
@@ -75,6 +76,7 @@ export async function compressImageToDataUrl(
     maxBytes?: number;
     minDim?: number;
     minQuality?: number;
+    rotateDeg?: number;
   },
 ): Promise<string> {
   const {
@@ -83,25 +85,30 @@ export async function compressImageToDataUrl(
     maxBytes = 180 * 1024,
     minDim = 640,
     minQuality = 0.42,
+    rotateDeg = 0,
   } = options ?? {};
 
-  const objectUrl = typeof source === "string" ? null : URL.createObjectURL(source);
-  const src = typeof source === "string" ? source : objectUrl!;
+  const bitmap = await loadOrientedBitmap(source);
+  const baseW = bitmap.width;
+  const baseH = bitmap.height;
+  const rot = ((rotateDeg % 360) + 360) % 360;
+  const swap = rot === 90 || rot === 270;
 
   try {
-    const img = await loadImage(src);
-    let currentDim = Math.min(maxDim, Math.max(img.width, img.height));
+    let currentDim = Math.min(maxDim, Math.max(baseW, baseH));
     let currentQuality = quality;
 
     for (let attempt = 0; attempt < 8; attempt++) {
-      const scale = Math.min(1, currentDim / Math.max(img.width, img.height));
-      const w = Math.max(320, Math.round(img.width * scale));
-      const h = Math.max(320, Math.round(img.height * scale));
+      const scale = Math.min(1, currentDim / Math.max(baseW, baseH));
+      const w = Math.max(320, Math.round(baseW * scale));
+      const h = Math.max(320, Math.round(baseH * scale));
       const canvas = document.createElement("canvas");
-      canvas.width = w;
-      canvas.height = h;
+      canvas.width = swap ? h : w;
+      canvas.height = swap ? w : h;
       const ctx = canvas.getContext("2d")!;
-      ctx.drawImage(img, 0, 0, w, h);
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.rotate((rot * Math.PI) / 180);
+      ctx.drawImage(bitmap, -w / 2, -h / 2, w, h);
 
       const dataUrl = canvas.toDataURL("image/jpeg", currentQuality);
       if (dataUrlSizeBytes(dataUrl) <= maxBytes) return dataUrl;
@@ -116,23 +123,37 @@ export async function compressImageToDataUrl(
     }
 
     const fallbackCanvas = document.createElement("canvas");
-    const fallbackScale = Math.min(1, minDim / Math.max(img.width, img.height));
-    fallbackCanvas.width = Math.max(320, Math.round(img.width * fallbackScale));
-    fallbackCanvas.height = Math.max(320, Math.round(img.height * fallbackScale));
-    const fallbackCtx = fallbackCanvas.getContext("2d")!;
-    fallbackCtx.drawImage(img, 0, 0, fallbackCanvas.width, fallbackCanvas.height);
+    const fallbackScale = Math.min(1, minDim / Math.max(baseW, baseH));
+    const fw = Math.max(320, Math.round(baseW * fallbackScale));
+    const fh = Math.max(320, Math.round(baseH * fallbackScale));
+    fallbackCanvas.width = swap ? fh : fw;
+    fallbackCanvas.height = swap ? fw : fh;
+    const fctx = fallbackCanvas.getContext("2d")!;
+    fctx.translate(fallbackCanvas.width / 2, fallbackCanvas.height / 2);
+    fctx.rotate((rot * Math.PI) / 180);
+    fctx.drawImage(bitmap, -fw / 2, -fh / 2, fw, fh);
     return fallbackCanvas.toDataURL("image/jpeg", minQuality);
   } finally {
-    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    if (typeof (bitmap as ImageBitmap).close === "function") {
+      (bitmap as ImageBitmap).close();
+    }
   }
 }
 
-function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = src;
-  });
+async function loadOrientedBitmap(
+  source: File | Blob | string,
+): Promise<ImageBitmap | HTMLImageElement> {
+  if (typeof source !== "string" && typeof createImageBitmap === "function") {
+    try {
+      return await createImageBitmap(source, { imageOrientation: "from-image" });
+    } catch {
+      // fall through
+    }
+  }
+  const objectUrl = typeof source === "string" ? null : URL.createObjectURL(source);
+  try {
+    return await loadImage(typeof source === "string" ? source : objectUrl!);
+  } finally {
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+  }
 }
