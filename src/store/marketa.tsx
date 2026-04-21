@@ -267,7 +267,7 @@ export function MarketaProvider({ children }: { children: ReactNode }) {
 
   const updateListing: Ctx["updateListing"] = useCallback(async (id, patch) => {
     if (!user) return;
-    const dbPatch: Record<string, unknown> = {};
+    const dbPatch: Database["public"]["Tables"]["listings"]["Update"] = {};
     if (patch.title !== undefined) dbPatch.title = patch.title;
     if (patch.description !== undefined) dbPatch.description = patch.description;
     if (patch.category !== undefined) dbPatch.category = patch.category;
