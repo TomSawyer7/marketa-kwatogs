@@ -364,16 +364,40 @@ function UploadSlot({ label, preview, blurScore, onPick }: { label: string; prev
 
 /* --------------------------- Pending Approval ---------------------------- */
 
-function PendingPanel({ verif }: { verif: VerifRow }) {
+function PendingPanel({ verif, userId, onRetry }: { verif: VerifRow; userId: string; onRetry: () => void }) {
+  const [confirmed, setConfirmed] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const discardAndRetry = async () => {
+    setBusy(true);
+    try {
+      const { error } = await supabase.from("verifications").delete().eq("user_id", userId);
+      if (error) throw error;
+      toast.success("Submission discarded. Please re-upload your ID.");
+      onRetry();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not discard submission.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
-    <section className="bg-card border border-border rounded-xl p-6 md:p-8 text-center">
-      <div className="mx-auto h-12 w-12 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 grid place-items-center mb-3">
-        <Loader2 className="h-6 w-6 animate-spin" />
+    <section className="bg-card border border-border rounded-xl p-6 md:p-8">
+      <div className="text-center">
+        <div className="mx-auto h-12 w-12 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 grid place-items-center mb-3">
+          {confirmed ? <Loader2 className="h-6 w-6 animate-spin" /> : <ShieldCheck className="h-6 w-6" />}
+        </div>
+        <h2 className="font-semibold">
+          {confirmed ? "Pending admin approval" : "Review your extracted details"}
+        </h2>
+        <p className="text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
+          {confirmed
+            ? "We've sent your ID to an administrator. This page will refresh automatically once reviewed."
+            : "Please verify everything below is correct before sending to the admin for approval."}
+        </p>
       </div>
-      <h2 className="font-semibold">Pending admin approval</h2>
-      <p className="text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
-        We've received your ID. An administrator will review it shortly. This page will refresh automatically.
-      </p>
+
       <div className="mt-5 text-left bg-secondary/50 rounded-lg p-4 text-sm space-y-1.5">
         <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Extracted details</p>
         <Field label="Full name" value={verif.ocr_full_name} />
@@ -391,6 +415,31 @@ function PendingPanel({ verif }: { verif: VerifRow }) {
         <Field label="Marital status" value={verif.ocr_marital_status} />
         <Field label="Date of issue" value={verif.ocr_date_of_issue} />
       </div>
+
+      {!confirmed && (
+        <div className="mt-5 flex flex-col sm:flex-row gap-2">
+          <Button
+            variant="outline"
+            className="flex-1"
+            disabled={busy}
+            onClick={discardAndRetry}
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Retry upload
+          </Button>
+          <Button
+            className="flex-1"
+            disabled={busy}
+            onClick={() => {
+              setConfirmed(true);
+              toast.success("Details confirmed. Awaiting admin approval.");
+            }}
+          >
+            <CheckCircle2 className="h-4 w-4 mr-2" />
+            Confirm details
+          </Button>
+        </div>
+      )}
     </section>
   );
 }
