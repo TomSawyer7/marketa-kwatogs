@@ -12,6 +12,27 @@ function dataUrlToParts(d: string): { mime: string; b64: string } {
   return { mime: "image/jpeg", b64: d };
 }
 
+function pick<T = unknown>(obj: Record<string, unknown> | undefined | null, ...keys: string[]): T | null {
+  if (!obj) return null;
+  for (const k of keys) {
+    const v = obj[k];
+    if (v !== undefined && v !== null && v !== "") return v as T;
+  }
+  return null;
+}
+
+function toIsoDate(input: unknown): string | null {
+  if (!input) return null;
+  const s = String(input).trim();
+  if (!s) return null;
+  // Already ISO
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  // mm/dd/yyyy or dd/mm/yyyy — IDAnalyzer typically returns yyyy-mm-dd, fall back to Date parse
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+  return null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -21,7 +42,7 @@ Deno.serve(async (req) => {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const ANON = Deno.env.get("SUPABASE_ANON_KEY");
     const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const IDANALYZER_API_KEY = Deno.env.get("IDANALYZER_API_KEY");
 
     if (!SUPABASE_URL || !ANON || !SERVICE) {
       return new Response(JSON.stringify({ error: "Missing function environment variables" }), {
@@ -30,8 +51,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (!LOVABLE_API_KEY) {
-      return new Response(JSON.stringify({ error: "LOVABLE_API_KEY not configured" }), {
+    if (!IDANALYZER_API_KEY) {
+      return new Response(JSON.stringify({ error: "IDANALYZER_API_KEY not configured" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -62,97 +83,65 @@ Deno.serve(async (req) => {
     const front = dataUrlToParts(body.frontImage);
     const back = dataUrlToParts(body.backImage);
 
-    const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    // ---- Call IDAnalyzer Core API (Scan) ----
+    // Docs: https://developer.idanalyzer.com/coreapi.html
+    const idaResp = await fetch("https://api2.idanalyzer.com/scan", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
+        "X-API-KEY": IDANALYZER_API_KEY,
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are a Philippine National ID (PhilSys) OCR and quality verifier. Inspect both front and back images. Extract data exactly as printed. Return ONLY via the provided tool. If text is not legible, set quality_ok=false and provide quality_issue.",
-          },
-          {
-            role: "user",
-            content: [
-              { type: "text", text: "Extract Philippine National ID details from these two images (front + back)." },
-              { type: "image_url", image_url: { url: `data:${front.mime};base64,${front.b64}` } },
-              { type: "image_url", image_url: { url: `data:${back.mime};base64,${back.b64}` } },
-            ],
-          },
-        ],
-        tools: [{
-          type: "function",
-          function: {
-            name: "report_id_extraction",
-            description: "Report extracted Philippine National ID data and image quality assessment.",
-            parameters: {
-              type: "object",
-              properties: {
-                quality_ok: { type: "boolean", description: "True if both images are sharp and readable." },
-                quality_issue: { type: "string", description: "If quality_ok=false, describe the issue (e.g. 'Front image is blurry')." },
-                full_name: { type: "string" },
-                date_of_birth: { type: "string", description: "ISO YYYY-MM-DD if possible." },
-                gender: { type: "string" },
-                psn: { type: "string", description: "PhilSys Number (PCN/PSN) as printed." },
-                address: { type: "string" },
-                looks_like_philid: { type: "boolean", description: "True if the front image is clearly a Philippine National ID." },
-              },
-              required: ["quality_ok", "looks_like_philid"],
-              additionalProperties: false,
-            },
-          },
-        }],
-        tool_choice: { type: "function", function: { name: "report_id_extraction" } },
+        profile: "security_low",
+        document: front.b64,
+        document_back: back.b64,
       }),
     });
 
-    if (!aiResp.ok) {
-      const t = await aiResp.text();
-      console.error("AI gateway error:", aiResp.status, t);
-      if (aiResp.status === 429) {
-        return new Response(JSON.stringify({ error: "AI rate limit exceeded. Please try again shortly." }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (aiResp.status === 402) {
-        return new Response(JSON.stringify({ error: "AI credits exhausted. Add funds in Workspace > Usage." }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      return new Response(JSON.stringify({ error: "AI gateway failed" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const aiJson = await aiResp.json();
-    const toolCall = aiJson?.choices?.[0]?.message?.tool_calls?.[0];
-    if (!toolCall) {
-      return new Response(JSON.stringify({ error: "Failed to parse ID. Please retake clearer photos." }), {
-        status: 422,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const extracted = JSON.parse(toolCall.function.arguments);
-
-    if (!extracted.looks_like_philid) {
-      return new Response(JSON.stringify({ error: "This does not appear to be a Philippine National ID." }), {
-        status: 422,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    if (!extracted.quality_ok) {
+    if (!idaResp.ok) {
+      const t = await idaResp.text();
+      console.error("IDAnalyzer error", idaResp.status, t);
       return new Response(JSON.stringify({
-        error: extracted.quality_issue || "Image too blurred. Please retake.",
+        error: `IDAnalyzer request failed (${idaResp.status}). Please retake the photos and try again.`,
+      }), {
+        status: 502,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const idaJson = await idaResp.json() as Record<string, unknown>;
+
+    // IDAnalyzer returns either { success: true, data: {...} } or top-level fields. Handle both.
+    const apiError = idaJson.error as { message?: string } | undefined;
+    if (apiError?.message) {
+      console.error("IDAnalyzer api error", apiError);
+      return new Response(JSON.stringify({ error: apiError.message }), {
+        status: 422,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const data = (idaJson.data as Record<string, unknown>) ?? idaJson;
+
+    const firstName = pick<string>(data, "firstName", "first_name", "givenName");
+    const middleName = pick<string>(data, "middleName", "middle_name");
+    const lastName = pick<string>(data, "lastName", "last_name", "surname", "familyName");
+    const fullName = pick<string>(data, "fullName", "full_name") ||
+      [firstName, middleName, lastName].filter(Boolean).join(" ").trim() || null;
+    const documentNumber = pick<string>(data, "documentNumber", "document_number", "documentNo");
+    const dob = toIsoDate(pick(data, "dob", "dateOfBirth", "date_of_birth"));
+    const sex = pick<string>(data, "sex", "gender");
+    const nationality = pick<string>(data, "nationality");
+    const address = pick<string>(data, "address1", "address");
+    const placeOfBirth = pick<string>(data, "placeOfBirth", "place_of_birth");
+    const bloodType = pick<string>(data, "bloodType", "blood_type");
+    const maritalStatus = pick<string>(data, "maritalStatus", "marital_status");
+    const dateOfIssue = toIsoDate(pick(data, "issued", "dateOfIssue", "date_of_issue"));
+    const documentType = String(pick(data, "documentType", "document_type") ?? "").toLowerCase();
+
+    if (!fullName && !documentNumber) {
+      return new Response(JSON.stringify({
+        error: "We couldn't read your ID. Please retake clearer photos in good lighting.",
         retry: true,
       }), {
         status: 422,
@@ -160,6 +149,18 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Soft check — warn but don't block if it doesn't look like a national ID
+    const looksLikePhilId = documentType.includes("national") || documentType.includes("identity") || !!documentNumber;
+    if (!looksLikePhilId) {
+      return new Response(JSON.stringify({
+        error: "This does not appear to be a valid government ID.",
+      }), {
+        status: 422,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ---- Persist images + draft verification row ----
     const admin = createClient(SUPABASE_URL, SERVICE);
     const ts = Date.now();
     const frontPath = `${user.id}/${ts}-front.jpg`;
@@ -190,11 +191,23 @@ Deno.serve(async (req) => {
       status: "pending",
       id_front_path: frontPath,
       id_back_path: backPath,
-      ocr_full_name: extracted.full_name ?? null,
-      ocr_date_of_birth: extracted.date_of_birth ?? null,
-      ocr_gender: extracted.gender ?? null,
-      ocr_psn: extracted.psn ?? null,
-      ocr_address: extracted.address ?? null,
+      // Legacy summary columns (kept for admin queue compatibility)
+      ocr_full_name: fullName,
+      ocr_date_of_birth: dob,
+      ocr_gender: sex,
+      ocr_psn: documentNumber,
+      ocr_address: address,
+      // Rich IDAnalyzer fields
+      ocr_first_name: firstName,
+      ocr_middle_name: middleName,
+      ocr_last_name: lastName,
+      ocr_document_number: documentNumber,
+      ocr_nationality: nationality,
+      ocr_place_of_birth: placeOfBirth,
+      ocr_blood_type: bloodType,
+      ocr_marital_status: maritalStatus,
+      ocr_date_of_issue: dateOfIssue,
+      ocr_sex: sex,
       liveness_passed: false,
       face_match_score: null,
       admin_notes: null,
@@ -212,11 +225,19 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({
       ok: true,
       extracted: {
-        full_name: extracted.full_name,
-        date_of_birth: extracted.date_of_birth,
-        gender: extracted.gender,
-        psn: extracted.psn,
-        address: extracted.address,
+        full_name: fullName,
+        first_name: firstName,
+        middle_name: middleName,
+        last_name: lastName,
+        document_number: documentNumber,
+        date_of_birth: dob,
+        sex,
+        nationality,
+        address,
+        place_of_birth: placeOfBirth,
+        blood_type: bloodType,
+        marital_status: maritalStatus,
+        date_of_issue: dateOfIssue,
       },
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

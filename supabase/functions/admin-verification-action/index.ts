@@ -118,6 +118,46 @@ Deno.serve(async (req) => {
         });
       }
 
+      // Pull all OCR fields so we can populate verified_users
+      const { data: vrow, error: vrowErr } = await admin
+        .from("verifications")
+        .select("ocr_full_name, ocr_first_name, ocr_middle_name, ocr_last_name, ocr_document_number, ocr_psn, ocr_date_of_birth, ocr_address, ocr_sex, ocr_gender, ocr_nationality, ocr_place_of_birth, ocr_blood_type, ocr_marital_status, ocr_date_of_issue")
+        .eq("user_id", body.user_id)
+        .maybeSingle();
+      if (vrowErr) throw vrowErr;
+      if (!vrow) {
+        return new Response(JSON.stringify({ error: "Verification not found" }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const fullName = vrow.ocr_full_name
+        || [vrow.ocr_first_name, vrow.ocr_middle_name, vrow.ocr_last_name].filter(Boolean).join(" ").trim()
+        || "Verified user";
+
+      const { error: upsertErr } = await admin.from("verified_users").upsert({
+        user_id: body.user_id,
+        full_name: fullName,
+        first_name: vrow.ocr_first_name,
+        middle_name: vrow.ocr_middle_name,
+        last_name: vrow.ocr_last_name,
+        document_number: vrow.ocr_document_number ?? vrow.ocr_psn,
+        date_of_birth: vrow.ocr_date_of_birth,
+        address: vrow.ocr_address,
+        sex: vrow.ocr_sex ?? vrow.ocr_gender,
+        nationality: vrow.ocr_nationality,
+        place_of_birth: vrow.ocr_place_of_birth,
+        blood_type: vrow.ocr_blood_type,
+        marital_status: vrow.ocr_marital_status,
+        date_of_issue: vrow.ocr_date_of_issue,
+        verified_at: new Date().toISOString(),
+      }, { onConflict: "user_id" });
+      if (upsertErr) throw upsertErr;
+
+      // Mirror the verified full name onto the public profile so the header shows it
+      await admin.from("profiles").update({ name: fullName }).eq("id", body.user_id);
+
       const { error } = await admin
         .from("verifications")
         .update({
