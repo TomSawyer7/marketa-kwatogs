@@ -21,7 +21,7 @@ export function Header() {
 
   const onSearch = (e: FormEvent) => {
     e.preventDefault();
-    navigate(`/?q=${encodeURIComponent(q.trim())}`);
+    navigate(`/browse?q=${encodeURIComponent(q.trim())}`);
   };
 
   const handleSell = (e: React.MouseEvent) => {
@@ -48,7 +48,7 @@ export function Header() {
     <header className="sticky top-0 z-40 bg-card border-b border-border">
       {/* Top bar */}
       <div className="h-[var(--header-h)] px-3 md:px-5 flex items-center gap-3">
-        <Link to="/" className="flex items-center gap-2 shrink-0">
+        <Link to="/browse" className="flex items-center gap-2 shrink-0">
           <div className="h-9 w-9 rounded-full bg-primary text-primary-foreground grid place-items-center">
             <Store className="h-5 w-5" />
           </div>
