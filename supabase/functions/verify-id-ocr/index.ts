@@ -12,22 +12,53 @@ function dataUrlToParts(d: string): { mime: string; b64: string } {
   return { mime: "image/jpeg", b64: d };
 }
 
-function pick<T = unknown>(obj: Record<string, unknown> | undefined | null, ...keys: string[]): T | null {
-  if (!obj) return null;
-  for (const k of keys) {
-    const v = obj[k];
-    if (v !== undefined && v !== null && v !== "") return v as T;
+function b64ToBlob(b64: string, mime: string): Blob {
+  const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+  return new Blob([bytes], { type: mime });
+}
+
+/**
+ * IDAnalyzer responses can come in three shapes depending on API version/profile:
+ *   - plain string                                 (v1 result.firstName)
+ *   - { value, confidence, source }                (v2 single)
+ *   - [ { value, confidence, source }, ... ]       (v2 multi-source)
+ * Unwrap to a plain string, picking the highest-confidence entry when applicable.
+ */
+function valueOf(v: unknown): string | null {
+  if (v === null || v === undefined) return null;
+  if (typeof v === "string") return v.trim() || null;
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  if (Array.isArray(v)) {
+    if (v.length === 0) return null;
+    const sorted = [...v].sort((a, b) => {
+      const ca = typeof a === "object" && a && "confidence" in a ? Number((a as Record<string, unknown>).confidence) || 0 : 0;
+      const cb = typeof b === "object" && b && "confidence" in b ? Number((b as Record<string, unknown>).confidence) || 0 : 0;
+      return cb - ca;
+    });
+    return valueOf(sorted[0]);
+  }
+  if (typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    if ("value" in o) return valueOf(o.value);
   }
   return null;
 }
 
-function toIsoDate(input: unknown): string | null {
+function pick(obj: Record<string, unknown> | undefined | null, ...keys: string[]): string | null {
+  if (!obj) return null;
+  for (const k of keys) {
+    const r = valueOf(obj[k]);
+    if (r) return r;
+  }
+  return null;
+}
+
+function toIsoDate(input: string | null): string | null {
   if (!input) return null;
-  const s = String(input).trim();
+  const s = input.trim();
   if (!s) return null;
-  // Already ISO
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
-  // mm/dd/yyyy or dd/mm/yyyy — IDAnalyzer typically returns yyyy-mm-dd, fall back to Date parse
+  // dd/mm/yyyy or mm/dd/yyyy — try Date.parse fallback
   const d = new Date(s);
   if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
   return null;
@@ -83,24 +114,24 @@ Deno.serve(async (req) => {
     const front = dataUrlToParts(body.frontImage);
     const back = dataUrlToParts(body.backImage);
 
-    // ---- Call IDAnalyzer Core API (Scan) ----
-    // Docs: https://developer.idanalyzer.com/coreapi.html
-    const idaResp = await fetch("https://api2.idanalyzer.com/scan", {
+    // ---- Call IDAnalyzer v1 Core API (multipart) ----
+    // Mirrors the working test app: POST https://api.idanalyzer.com/ with
+    // apikey + file (front). Plain-string results in `data.result.*`.
+    const form = new FormData();
+    form.append("apikey", IDANALYZER_API_KEY);
+    form.append("file", b64ToBlob(front.b64, front.mime), "front.jpg");
+    form.append("file_back", b64ToBlob(back.b64, back.mime), "back.jpg");
+    form.append("accuracy", "2");
+    form.append("authenticate", "false");
+
+    const idaResp = await fetch("https://api.idanalyzer.com/", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-API-KEY": IDANALYZER_API_KEY,
-      },
-      body: JSON.stringify({
-        profile: "security_low",
-        document: front.b64,
-        document_back: back.b64,
-      }),
+      body: form,
     });
 
     if (!idaResp.ok) {
       const t = await idaResp.text();
-      console.error("IDAnalyzer error", idaResp.status, t);
+      console.error("IDAnalyzer http error", idaResp.status, t.slice(0, 500));
       return new Response(JSON.stringify({
         error: `IDAnalyzer request failed (${idaResp.status}). Please retake the photos and try again.`,
       }), {
@@ -110,10 +141,12 @@ Deno.serve(async (req) => {
     }
 
     const idaJson = await idaResp.json() as Record<string, unknown>;
+    console.log("IDAnalyzer raw response keys:", Object.keys(idaJson));
+    console.log("IDAnalyzer result:", JSON.stringify(idaJson.result ?? idaJson).slice(0, 2000));
 
-    // IDAnalyzer returns either { success: true, data: {...} } or top-level fields. Handle both.
-    const apiError = idaJson.error as { message?: string } | undefined;
-    if (apiError?.message) {
+    // v1: { error, result: {...} }; v2: { data: {...}, error }
+    const apiError = idaJson.error as { message?: string } | string | undefined;
+    if (apiError && typeof apiError === "object" && apiError.message) {
       console.error("IDAnalyzer api error", apiError);
       return new Response(JSON.stringify({ error: apiError.message }), {
         status: 422,
@@ -121,23 +154,28 @@ Deno.serve(async (req) => {
       });
     }
 
-    const data = (idaJson.data as Record<string, unknown>) ?? idaJson;
+    const data = ((idaJson.result as Record<string, unknown>) ??
+                  (idaJson.data as Record<string, unknown>) ??
+                  idaJson) as Record<string, unknown>;
 
-    const firstName = pick<string>(data, "firstName", "first_name", "givenName");
-    const middleName = pick<string>(data, "middleName", "middle_name");
-    const lastName = pick<string>(data, "lastName", "last_name", "surname", "familyName");
-    const fullName = pick<string>(data, "fullName", "full_name") ||
-      [firstName, middleName, lastName].filter(Boolean).join(" ").trim() || null;
-    const documentNumber = pick<string>(data, "documentNumber", "document_number", "documentNo");
-    const dob = toIsoDate(pick(data, "dob", "dateOfBirth", "date_of_birth"));
-    const sex = pick<string>(data, "sex", "gender");
-    const nationality = pick<string>(data, "nationality");
-    const address = pick<string>(data, "address1", "address");
-    const placeOfBirth = pick<string>(data, "placeOfBirth", "place_of_birth");
-    const bloodType = pick<string>(data, "bloodType", "blood_type");
-    const maritalStatus = pick<string>(data, "maritalStatus", "marital_status");
-    const dateOfIssue = toIsoDate(pick(data, "issued", "dateOfIssue", "date_of_issue"));
-    const documentType = String(pick(data, "documentType", "document_type") ?? "").toLowerCase();
+    // Field extraction — covers v1 (plain string) and v2 (array/object) keys
+    const firstName = pick(data, "firstName", "first_name", "givenName", "given_name");
+    const middleName = pick(data, "middleName", "middle_name");
+    const lastName = pick(data, "lastName", "last_name", "surname", "familyName", "family_name");
+    const fullName =
+      pick(data, "fullName", "full_name") ||
+      [firstName, middleName, lastName].filter(Boolean).join(" ").trim() ||
+      null;
+    const documentNumber = pick(data, "documentNumber", "document_number", "documentNo", "docNumber");
+    const dob = toIsoDate(pick(data, "dob", "birthDate", "dateOfBirth", "date_of_birth"));
+    const sex = pick(data, "sex", "gender");
+    const nationality = pick(data, "nationality");
+    const address = pick(data, "address1", "address", "fullAddress");
+    const placeOfBirth = pick(data, "placeOfBirth", "place_of_birth");
+    const bloodType = pick(data, "bloodType", "blood_type");
+    const maritalStatus = pick(data, "maritalStatus", "marital_status");
+    const dateOfIssue = toIsoDate(pick(data, "issued", "dateOfIssue", "date_of_issue", "issueDate"));
+    const documentType = (pick(data, "documentType", "document_type", "type") ?? "").toLowerCase();
 
     if (!fullName && !documentNumber) {
       return new Response(JSON.stringify({
@@ -149,9 +187,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Soft check — warn but don't block if it doesn't look like a national ID
-    const looksLikePhilId = documentType.includes("national") || documentType.includes("identity") || !!documentNumber;
-    if (!looksLikePhilId) {
+    const looksLikeId = documentType.includes("national") || documentType.includes("identity") || !!documentNumber;
+    if (!looksLikeId) {
       return new Response(JSON.stringify({
         error: "This does not appear to be a valid government ID.",
       }), {
