@@ -51,11 +51,7 @@ export default function Landing() {
           </Link>
 
           <nav className="flex items-center gap-2">
-            {user ? (
-              <Button asChild className="rounded-md h-9 px-4 bg-primary text-primary-foreground hover:bg-primary-hover">
-                <Link to="/browse">Enter market <ArrowRight className="h-4 w-4" /></Link>
-              </Button>
-            ) : (
+            {!user && (
               <>
                 <Button asChild variant="ghost" size="sm" className="rounded-md h-9 px-4 text-foreground/80">
                   <Link to="/auth">Log in</Link>
