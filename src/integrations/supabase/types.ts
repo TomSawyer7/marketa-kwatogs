@@ -155,10 +155,20 @@ export type Database = {
           id_front_path: string
           liveness_passed: boolean
           ocr_address: string | null
+          ocr_blood_type: string | null
           ocr_date_of_birth: string | null
+          ocr_date_of_issue: string | null
+          ocr_document_number: string | null
+          ocr_first_name: string | null
           ocr_full_name: string | null
           ocr_gender: string | null
+          ocr_last_name: string | null
+          ocr_marital_status: string | null
+          ocr_middle_name: string | null
+          ocr_nationality: string | null
+          ocr_place_of_birth: string | null
           ocr_psn: string | null
+          ocr_sex: string | null
           status: string
           submitted_at: string
           updated_at: string
@@ -174,10 +184,20 @@ export type Database = {
           id_front_path: string
           liveness_passed?: boolean
           ocr_address?: string | null
+          ocr_blood_type?: string | null
           ocr_date_of_birth?: string | null
+          ocr_date_of_issue?: string | null
+          ocr_document_number?: string | null
+          ocr_first_name?: string | null
           ocr_full_name?: string | null
           ocr_gender?: string | null
+          ocr_last_name?: string | null
+          ocr_marital_status?: string | null
+          ocr_middle_name?: string | null
+          ocr_nationality?: string | null
+          ocr_place_of_birth?: string | null
           ocr_psn?: string | null
+          ocr_sex?: string | null
           status?: string
           submitted_at?: string
           updated_at?: string
@@ -193,15 +213,79 @@ export type Database = {
           id_front_path?: string
           liveness_passed?: boolean
           ocr_address?: string | null
+          ocr_blood_type?: string | null
           ocr_date_of_birth?: string | null
+          ocr_date_of_issue?: string | null
+          ocr_document_number?: string | null
+          ocr_first_name?: string | null
           ocr_full_name?: string | null
           ocr_gender?: string | null
+          ocr_last_name?: string | null
+          ocr_marital_status?: string | null
+          ocr_middle_name?: string | null
+          ocr_nationality?: string | null
+          ocr_place_of_birth?: string | null
           ocr_psn?: string | null
+          ocr_sex?: string | null
           status?: string
           submitted_at?: string
           updated_at?: string
           user_id?: string
           verified_at?: string | null
+        }
+        Relationships: []
+      }
+      verified_users: {
+        Row: {
+          address: string | null
+          blood_type: string | null
+          date_of_birth: string | null
+          date_of_issue: string | null
+          document_number: string | null
+          first_name: string | null
+          full_name: string
+          last_name: string | null
+          marital_status: string | null
+          middle_name: string | null
+          nationality: string | null
+          place_of_birth: string | null
+          sex: string | null
+          user_id: string
+          verified_at: string
+        }
+        Insert: {
+          address?: string | null
+          blood_type?: string | null
+          date_of_birth?: string | null
+          date_of_issue?: string | null
+          document_number?: string | null
+          first_name?: string | null
+          full_name: string
+          last_name?: string | null
+          marital_status?: string | null
+          middle_name?: string | null
+          nationality?: string | null
+          place_of_birth?: string | null
+          sex?: string | null
+          user_id: string
+          verified_at?: string
+        }
+        Update: {
+          address?: string | null
+          blood_type?: string | null
+          date_of_birth?: string | null
+          date_of_issue?: string | null
+          document_number?: string | null
+          first_name?: string | null
+          full_name?: string
+          last_name?: string | null
+          marital_status?: string | null
+          middle_name?: string | null
+          nationality?: string | null
+          place_of_birth?: string | null
+          sex?: string | null
+          user_id?: string
+          verified_at?: string
         }
         Relationships: []
       }
