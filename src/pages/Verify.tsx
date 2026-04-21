@@ -134,7 +134,7 @@ const Verify = () => {
             />
           )}
 
-          {status === "pending" && <PendingPanel verif={verif!} />}
+          {status === "pending" && <PendingPanel verif={verif!} userId={user.id} onRetry={loadStatus} />}
 
           {/* STEP 2 */}
           {status === "id_approved" && (
