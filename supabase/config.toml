@@ -1,10 +1,1 @@
 project_id = "gsawquzxlrkraylbyitt"
-
-[functions.verify-id-ocr]
-verify_jwt = false
-
-[functions.verify-liveness]
-verify_jwt = false
-
-[functions.admin-verification-action]
-verify_jwt = false
