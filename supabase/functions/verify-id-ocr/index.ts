@@ -114,15 +114,16 @@ Deno.serve(async (req) => {
     const front = dataUrlToParts(body.frontImage);
     const back = dataUrlToParts(body.backImage);
 
-    // ---- Call IDAnalyzer v1 Core API (multipart) ----
-    // Mirror the working test app: send ONLY the front image with accuracy=2.
-    // No verbose, no file_back — that combination returns the rich PhilSys
-    // field set (middleName, sex, placeOfBirth, dateOfIssue, maritalStatus,
-    // bloodType) as plain strings. Adding file_back or verbose=2 changes the
-    // response shape and drops these extended fields for PhilSys IDs.
+    // ---- Call IDAnalyzer v2 /scan API (multipart) ----
+    // We need BOTH front and back so the QR barcode on the PhilSys back side
+    // is decoded. The QR contains a JSON payload with middleName, sex,
+    // placeOfBirth, blood type, dateOfIssue — fields that are NOT printed
+    // in OCR-readable text on the card. Profile "philsys" enables barcode
+    // decoding and returns rich field arrays of {value, confidence}.
     const form = new FormData();
     form.append("apikey", IDANALYZER_API_KEY);
     form.append("file", b64ToBlob(front.b64, front.mime), "front.jpg");
+    form.append("file_back", b64ToBlob(back.b64, back.mime), "back.jpg");
     form.append("accuracy", "2");
 
     const idaResp = await fetch("https://api.idanalyzer.com/", {
@@ -164,24 +165,63 @@ Deno.serve(async (req) => {
                   (idaJson.data as Record<string, unknown>) ??
                   idaJson) as Record<string, unknown>;
 
-    // Field extraction — covers v1 verbose response keys for PhilSys IDs
-    const firstName = pick(data, "firstName", "first_name", "givenName", "given_name", "given_names");
-    const middleName = pick(data, "middleName", "middle_name", "middlename");
-    const lastName = pick(data, "lastName", "last_name", "surname", "familyName", "family_name", "lastname");
+    // Field extraction — covers v1/v2 response keys for PhilSys IDs
+    let firstName = pick(data, "firstName", "first_name", "givenName", "given_name", "given_names");
+    let middleName = pick(data, "middleName", "middle_name", "middlename");
+    let lastName = pick(data, "lastName", "last_name", "surname", "familyName", "family_name", "lastname");
+    let documentNumber = pick(data, "documentNumber", "document_number", "documentNo", "docNumber", "id_number");
+    let dob = toIsoDate(pick(data, "dob", "birthDate", "dateOfBirth", "date_of_birth"));
+    let sex = pick(data, "sex", "gender");
+    const nationality = pick(data, "nationality_full", "nationality", "nationality_iso3");
+    const address = pick(data, "address1", "address", "fullAddress", "full_address");
+    let placeOfBirth = pick(data, "placeOfBirth", "place_of_birth", "birthPlace", "birth_place", "pob");
+    let bloodType = pick(data, "bloodType", "blood_type", "blood");
+    const maritalStatus = pick(data, "maritalStatus", "marital_status", "civilStatus", "civil_status");
+    let dateOfIssue = toIsoDate(pick(data, "issued", "dateOfIssue", "date_of_issue", "issueDate", "issue_date"));
+    const documentType = (pick(data, "documentType", "document_type", "type", "documentName", "document_name") ?? "").toLowerCase();
+
+    // ---- Parse PhilSys QR barcode (back side) for hidden fields ----
+    // PhilSys back stores subject data inside a QR code as a JSON string.
+    // IDAnalyzer returns it under `barcode` (array of {value: rawString, ...}).
+    try {
+      const rawBarcodes = data.barcode ?? data.barcodes ?? data.qrcode ?? data.qrCode;
+      const barcodeArr = Array.isArray(rawBarcodes) ? rawBarcodes : rawBarcodes ? [rawBarcodes] : [];
+      for (const bc of barcodeArr) {
+        const raw = typeof bc === "string" ? bc : ((bc as Record<string, unknown>)?.value ?? (bc as Record<string, unknown>)?.data ?? (bc as Record<string, unknown>)?.text);
+        const rawStr = typeof raw === "string" ? raw : valueOf(raw);
+        if (!rawStr || !rawStr.trim().startsWith("{")) continue;
+        const qr = JSON.parse(rawStr) as Record<string, unknown>;
+        const subject = (qr.subject ?? {}) as Record<string, unknown>;
+        const sv = (k: string) => {
+          const v = subject[k];
+          return typeof v === "string" && v.trim() ? v.trim() : null;
+        };
+        if (!firstName) firstName = sv("fName");
+        if (!middleName) middleName = sv("mName");
+        if (!lastName) lastName = sv("lName");
+        if (!sex) sex = sv("sex");
+        if (!placeOfBirth) placeOfBirth = sv("POB");
+        if (!dob) dob = toIsoDate(sv("DOB"));
+        if (!documentNumber) documentNumber = sv("PCN");
+        if (!dateOfIssue) {
+          const di = qr.DateIssued;
+          dateOfIssue = toIsoDate(typeof di === "string" ? di : null);
+        }
+        if (!bloodType) {
+          const bf = subject.BF;
+          bloodType = Array.isArray(bf) ? bf.join("") : (typeof bf === "string" ? bf : null);
+        }
+        console.log("Parsed PhilSys QR subject keys:", Object.keys(subject));
+        break;
+      }
+    } catch (err) {
+      console.warn("QR parse failed:", err instanceof Error ? err.message : err);
+    }
+
     const fullName =
       pick(data, "fullName", "full_name", "name") ||
       [firstName, middleName, lastName].filter(Boolean).join(" ").trim() ||
       null;
-    const documentNumber = pick(data, "documentNumber", "document_number", "documentNo", "docNumber", "id_number");
-    const dob = toIsoDate(pick(data, "dob", "birthDate", "dateOfBirth", "date_of_birth"));
-    const sex = pick(data, "sex", "gender");
-    const nationality = pick(data, "nationality_full", "nationality", "nationality_iso3");
-    const address = pick(data, "address1", "address", "fullAddress", "full_address");
-    const placeOfBirth = pick(data, "placeOfBirth", "place_of_birth", "birthPlace", "birth_place", "pob");
-    const bloodType = pick(data, "bloodType", "blood_type", "blood");
-    const maritalStatus = pick(data, "maritalStatus", "marital_status", "civilStatus", "civil_status");
-    const dateOfIssue = toIsoDate(pick(data, "issued", "dateOfIssue", "date_of_issue", "issueDate", "issue_date"));
-    const documentType = (pick(data, "documentType", "document_type", "type", "documentName", "document_name") ?? "").toLowerCase();
 
     if (!fullName && !documentNumber) {
       return new Response(JSON.stringify({

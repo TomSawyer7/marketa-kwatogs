@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CheckCircle2, Loader2, ShieldCheck, Upload, Video, AlertTriangle, ArrowRight, RefreshCw, Camera } from "lucide-react";
+import { CheckCircle2, Loader2, ShieldCheck, Upload, Video, AlertTriangle, ArrowRight, RefreshCw, Camera, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
@@ -34,15 +34,6 @@ const MAX_ORIGINAL_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_EDGE_IMAGE_BYTES = 110 * 1024;
 const MAX_EDGE_REQUEST_BYTES = 320 * 1024;
 
-async function prepareIdImageForUpload(file: File) {
-  return compressImageToDataUrl(file, {
-    maxDim: 840,
-    quality: 0.68,
-    maxBytes: MAX_EDGE_IMAGE_BYTES,
-    minDim: 520,
-    minQuality: 0.34,
-  });
-}
 
 function getIdUploadErrorMessage(message: string) {
   if (message.includes("Failed to send a request to the Edge Function")) {
@@ -205,6 +196,8 @@ function Step1Upload({ onSubmitted, previousNotes }: { onSubmitted: () => void; 
   const [back, setBack] = useState<File | null>(null);
   const [frontPreview, setFrontPreview] = useState<string | null>(null);
   const [backPreview, setBackPreview] = useState<string | null>(null);
+  const [frontRot, setFrontRot] = useState(0);
+  const [backRot, setBackRot] = useState(0);
   const [frontBlur, setFrontBlur] = useState<number | null>(null);
   const [backBlur, setBackBlur] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -219,13 +212,24 @@ function Step1Upload({ onSubmitted, previousNotes }: { onSubmitted: () => void; 
       toast.error("Image must be under 8 MB.");
       return;
     }
-    const url = URL.createObjectURL(file);
+    // Build EXIF-corrected preview so users see the same orientation
+    // that gets sent to OCR.
+    let previewUrl: string;
+    try {
+      previewUrl = await compressImageToDataUrl(file, {
+        maxDim: 720,
+        quality: 0.78,
+        maxBytes: 250 * 1024,
+        minDim: 480,
+        minQuality: 0.5,
+      });
+    } catch {
+      previewUrl = URL.createObjectURL(file);
+    }
     if (side === "front") {
-      if (frontPreview) URL.revokeObjectURL(frontPreview);
-      setFront(file); setFrontPreview(url);
+      setFront(file); setFrontPreview(previewUrl); setFrontRot(0);
     } else {
-      if (backPreview) URL.revokeObjectURL(backPreview);
-      setBack(file); setBackPreview(url);
+      setBack(file); setBackPreview(previewUrl); setBackRot(0);
     }
     try {
       const score = await estimateBlurScore(file);
@@ -244,7 +248,16 @@ function Step1Upload({ onSubmitted, previousNotes }: { onSubmitted: () => void; 
     if (!front || !back) return;
     setSubmitting(true); setServerError(null);
     try {
-      const [frontData, backData] = await Promise.all([prepareIdImageForUpload(front), prepareIdImageForUpload(back)]);
+      const [frontData, backData] = await Promise.all([
+        compressImageToDataUrl(front, {
+          maxDim: 840, quality: 0.68, maxBytes: MAX_EDGE_IMAGE_BYTES,
+          minDim: 520, minQuality: 0.34, rotateDeg: frontRot,
+        }),
+        compressImageToDataUrl(back, {
+          maxDim: 840, quality: 0.68, maxBytes: MAX_EDGE_IMAGE_BYTES,
+          minDim: 520, minQuality: 0.34, rotateDeg: backRot,
+        }),
+      ]);
       const payload = { frontImage: frontData, backImage: backData };
       const requestBytes = new Blob([JSON.stringify(payload)]).size;
       if (
@@ -283,7 +296,7 @@ function Step1Upload({ onSubmitted, previousNotes }: { onSubmitted: () => void; 
         <div className="h-9 w-9 rounded-full bg-primary/10 text-primary grid place-items-center"><Upload className="h-4 w-4" /></div>
         <div>
           <h2 className="font-semibold">Step 1 · Upload your Philippine National ID</h2>
-          <p className="text-sm text-muted-foreground">Take clear, well-lit photos of the front and back. We'll extract your details automatically.</p>
+          <p className="text-sm text-muted-foreground">Take clear, well-lit photos of the front and back. Use the rotate button if a photo isn't upright.</p>
         </div>
       </div>
 
@@ -298,8 +311,22 @@ function Step1Upload({ onSubmitted, previousNotes }: { onSubmitted: () => void; 
       )}
 
       <div className="grid sm:grid-cols-2 gap-4">
-        <UploadSlot label="Front of ID" preview={frontPreview} blurScore={frontBlur} onPick={(f) => handlePick("front", f)} />
-        <UploadSlot label="Back of ID" preview={backPreview} blurScore={backBlur} onPick={(f) => handlePick("back", f)} />
+        <UploadSlot
+          label="Front of ID"
+          preview={frontPreview}
+          rotation={frontRot}
+          blurScore={frontBlur}
+          onPick={(f) => handlePick("front", f)}
+          onRotate={() => setFrontRot((r) => (r + 90) % 360)}
+        />
+        <UploadSlot
+          label="Back of ID"
+          preview={backPreview}
+          rotation={backRot}
+          blurScore={backBlur}
+          onPick={(f) => handlePick("back", f)}
+          onRotate={() => setBackRot((r) => (r + 90) % 360)}
+        />
       </div>
 
       {(frontBlurry || backBlurry) && (
@@ -309,7 +336,7 @@ function Step1Upload({ onSubmitted, previousNotes }: { onSubmitted: () => void; 
             <p className="font-medium">Image too blurred</p>
             <p className="text-muted-foreground">Re-take the {frontBlurry && backBlurry ? "front and back" : frontBlurry ? "front" : "back"} in better lighting and hold the camera steady.</p>
           </div>
-          <Button variant="outline" size="sm" onClick={() => { setFront(null); setFrontPreview(null); setFrontBlur(null); setBack(null); setBackPreview(null); setBackBlur(null); }}>
+          <Button variant="outline" size="sm" onClick={() => { setFront(null); setFrontPreview(null); setFrontBlur(null); setFrontRot(0); setBack(null); setBackPreview(null); setBackBlur(null); setBackRot(0); }}>
             <RefreshCw className="h-3.5 w-3.5 mr-1" /> Retry
           </Button>
         </div>
@@ -326,7 +353,16 @@ function Step1Upload({ onSubmitted, previousNotes }: { onSubmitted: () => void; 
   );
 }
 
-function UploadSlot({ label, preview, blurScore, onPick }: { label: string; preview: string | null; blurScore: number | null; onPick: (f: File) => void }) {
+function UploadSlot({
+  label, preview, rotation, blurScore, onPick, onRotate,
+}: {
+  label: string;
+  preview: string | null;
+  rotation: number;
+  blurScore: number | null;
+  onPick: (f: File) => void;
+  onRotate: () => void;
+}) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   return (
     <div>
@@ -337,7 +373,12 @@ function UploadSlot({ label, preview, blurScore, onPick }: { label: string; prev
         className="relative w-full aspect-[1.6] rounded-lg border-2 border-dashed border-border bg-secondary/40 hover:border-primary hover:bg-secondary transition overflow-hidden grid place-items-center text-xs text-muted-foreground"
       >
         {preview ? (
-          <img src={preview} alt={label} className="absolute inset-0 w-full h-full object-cover" />
+          <img
+            src={preview}
+            alt={label}
+            className="absolute inset-0 w-full h-full object-contain transition-transform"
+            style={{ transform: `rotate(${rotation}deg)` }}
+          />
         ) : (
           <div className="flex flex-col items-center gap-1">
             <Upload className="h-5 w-5" />
@@ -353,11 +394,18 @@ function UploadSlot({ label, preview, blurScore, onPick }: { label: string; prev
         className="hidden"
         onChange={(e) => { const f = e.target.files?.[0]; if (f) onPick(f); e.target.value = ""; }}
       />
-      {blurScore !== null && (
-        <p className={`text-xs mt-1.5 ${blurScore < BLUR_THRESHOLD ? "text-destructive" : "text-muted-foreground"}`}>
-          Sharpness: {Math.round(blurScore)} {blurScore < BLUR_THRESHOLD ? "· too blurry" : "· OK"}
-        </p>
-      )}
+      <div className="flex items-center justify-between mt-1.5 gap-2">
+        {blurScore !== null ? (
+          <p className={`text-xs ${blurScore < BLUR_THRESHOLD ? "text-destructive" : "text-muted-foreground"}`}>
+            Sharpness: {Math.round(blurScore)} {blurScore < BLUR_THRESHOLD ? "· too blurry" : "· OK"}
+          </p>
+        ) : <span className="text-xs text-muted-foreground">&nbsp;</span>}
+        {preview && (
+          <Button type="button" variant="outline" size="sm" onClick={onRotate} className="h-7 px-2 text-xs">
+            <RotateCw className="h-3.5 w-3.5 mr-1" /> Rotate 90°
+          </Button>
+        )}
+      </div>
     </div>
   );
 }
