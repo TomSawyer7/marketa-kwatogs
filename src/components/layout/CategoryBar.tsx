@@ -23,7 +23,7 @@ const CATEGORY_EMOJI: Record<string, string> = {
 export function CategoryBar() {
   const location = useLocation();
   const params = new URLSearchParams(location.search);
-  const activeCat = location.pathname === "/" ? params.get("cat") ?? "all" : "";
+  const activeCat = location.pathname === "/browse" ? params.get("cat") ?? "all" : "";
 
   return (
     <nav
@@ -38,7 +38,7 @@ export function CategoryBar() {
             return (
               <li key={c.slug}>
                 <NavLink
-                  to={`/?cat=${c.slug}`}
+                  to={`/browse?cat=${c.slug}`}
                   className={cn(
                     "inline-flex items-center gap-2 h-9 px-3.5 rounded-full text-sm font-medium border transition whitespace-nowrap",
                     isActive
