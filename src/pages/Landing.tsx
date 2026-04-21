@@ -215,10 +215,10 @@ export default function Landing() {
       <footer className="max-w-7xl mx-auto px-5 md:px-8 py-10 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
         <div className="flex items-center gap-2">
           <ShieldCheck className="h-4 w-4" />
-          <span className="font-semibold text-foreground">TrustMart</span>
+          <span className="font-semibold text-foreground">Marketa</span>
           <span>· PhilSys-verified marketplace</span>
         </div>
-        <p>© {new Date().getFullYear()} TrustMart. All rights reserved.</p>
+        <p>© {new Date().getFullYear()} Marketa. All rights reserved.</p>
       </footer>
     </div>
   );
