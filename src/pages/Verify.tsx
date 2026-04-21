@@ -73,10 +73,15 @@ const Verify = () => {
     if (!user) return;
     const { data } = await supabase
       .from("verifications")
-      .select("status, ocr_full_name, ocr_date_of_birth, ocr_gender, ocr_psn, admin_notes, face_match_score")
+      .select("status, ocr_full_name, ocr_first_name, ocr_middle_name, ocr_last_name, ocr_date_of_birth, ocr_gender, ocr_sex, ocr_psn, ocr_document_number, ocr_nationality, ocr_address, ocr_place_of_birth, ocr_blood_type, ocr_marital_status, ocr_date_of_issue, admin_notes, face_match_score")
       .eq("user_id", user.id)
       .maybeSingle();
-    setVerif((data as VerifRow) ?? { status: null, ocr_full_name: null, ocr_date_of_birth: null, ocr_gender: null, ocr_psn: null, admin_notes: null, face_match_score: null });
+    setVerif((data as VerifRow) ?? {
+      status: null, ocr_full_name: null, ocr_first_name: null, ocr_middle_name: null, ocr_last_name: null,
+      ocr_date_of_birth: null, ocr_gender: null, ocr_sex: null, ocr_psn: null, ocr_document_number: null,
+      ocr_nationality: null, ocr_address: null, ocr_place_of_birth: null, ocr_blood_type: null,
+      ocr_marital_status: null, ocr_date_of_issue: null, admin_notes: null, face_match_score: null,
+    });
     setLoading(false);
   };
 
