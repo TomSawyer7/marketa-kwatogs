@@ -123,6 +123,13 @@ Deno.serve(async (req) => {
     form.append("file_back", b64ToBlob(back.b64, back.mime), "back.jpg");
     form.append("accuracy", "2");
     form.append("authenticate", "false");
+    // Request the full extended dataset (middle name, sex, place of birth,
+    // marital status, blood type, etc.) — without these the basic v1 response
+    // omits those fields even when present on the ID.
+    form.append("chkservice", "mrz,face,docusign");
+    form.append("vault_save", "true");
+    form.append("verbose", "2");
+    form.append("get_contract", "false");
 
     const idaResp = await fetch("https://api.idanalyzer.com/", {
       method: "POST",
@@ -142,7 +149,12 @@ Deno.serve(async (req) => {
 
     const idaJson = await idaResp.json() as Record<string, unknown>;
     console.log("IDAnalyzer raw response keys:", Object.keys(idaJson));
-    console.log("IDAnalyzer result:", JSON.stringify(idaJson.result ?? idaJson).slice(0, 2000));
+    // Log the full result so we can see every field IDAnalyzer returned.
+    const resultStr = JSON.stringify(idaJson.result ?? idaJson);
+    console.log("IDAnalyzer result length:", resultStr.length);
+    for (let i = 0; i < resultStr.length; i += 1500) {
+      console.log(`IDAnalyzer result chunk ${i / 1500}:`, resultStr.slice(i, i + 1500));
+    }
 
     // v1: { error, result: {...} }; v2: { data: {...}, error }
     const apiError = idaJson.error as { message?: string } | string | undefined;
@@ -158,24 +170,24 @@ Deno.serve(async (req) => {
                   (idaJson.data as Record<string, unknown>) ??
                   idaJson) as Record<string, unknown>;
 
-    // Field extraction — covers v1 (plain string) and v2 (array/object) keys
-    const firstName = pick(data, "firstName", "first_name", "givenName", "given_name");
-    const middleName = pick(data, "middleName", "middle_name");
-    const lastName = pick(data, "lastName", "last_name", "surname", "familyName", "family_name");
+    // Field extraction — covers v1 verbose response keys for PhilSys IDs
+    const firstName = pick(data, "firstName", "first_name", "givenName", "given_name", "given_names");
+    const middleName = pick(data, "middleName", "middle_name", "middlename");
+    const lastName = pick(data, "lastName", "last_name", "surname", "familyName", "family_name", "lastname");
     const fullName =
-      pick(data, "fullName", "full_name") ||
+      pick(data, "fullName", "full_name", "name") ||
       [firstName, middleName, lastName].filter(Boolean).join(" ").trim() ||
       null;
-    const documentNumber = pick(data, "documentNumber", "document_number", "documentNo", "docNumber");
+    const documentNumber = pick(data, "documentNumber", "document_number", "documentNo", "docNumber", "id_number");
     const dob = toIsoDate(pick(data, "dob", "birthDate", "dateOfBirth", "date_of_birth"));
     const sex = pick(data, "sex", "gender");
     const nationality = pick(data, "nationality_full", "nationality", "nationality_iso3");
-    const address = pick(data, "address1", "address", "fullAddress");
-    const placeOfBirth = pick(data, "placeOfBirth", "place_of_birth");
-    const bloodType = pick(data, "bloodType", "blood_type");
-    const maritalStatus = pick(data, "maritalStatus", "marital_status");
-    const dateOfIssue = toIsoDate(pick(data, "issued", "dateOfIssue", "date_of_issue", "issueDate"));
-    const documentType = (pick(data, "documentType", "document_type", "type") ?? "").toLowerCase();
+    const address = pick(data, "address1", "address", "fullAddress", "full_address");
+    const placeOfBirth = pick(data, "placeOfBirth", "place_of_birth", "birthPlace", "birth_place", "pob");
+    const bloodType = pick(data, "bloodType", "blood_type", "blood");
+    const maritalStatus = pick(data, "maritalStatus", "marital_status", "civilStatus", "civil_status");
+    const dateOfIssue = toIsoDate(pick(data, "issued", "dateOfIssue", "date_of_issue", "issueDate", "issue_date"));
+    const documentType = (pick(data, "documentType", "document_type", "type", "documentName", "document_name") ?? "").toLowerCase();
 
     if (!fullName && !documentNumber) {
       return new Response(JSON.stringify({
