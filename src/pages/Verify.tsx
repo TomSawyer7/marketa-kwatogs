@@ -368,11 +368,43 @@ function PendingPanel({ verif }: { verif: VerifRow }) {
     </section>
   );
 }
+/** Defensive: unwrap legacy rows where value was stored as `[{value,...}]` JSON. */
+function displayOcr(value: string | null): string {
+  if (!value) return "—";
+  const s = String(value).trim();
+  if (!s) return "—";
+  if (s.startsWith("[") || s.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(s);
+      const unwrap = (v: unknown): string | null => {
+        if (v == null) return null;
+        if (typeof v === "string") return v;
+        if (Array.isArray(v)) {
+          const sorted = [...v].sort((a, b) => {
+            const ca = typeof a === "object" && a && "confidence" in a ? Number((a as Record<string, unknown>).confidence) || 0 : 0;
+            const cb = typeof b === "object" && b && "confidence" in b ? Number((b as Record<string, unknown>).confidence) || 0 : 0;
+            return cb - ca;
+          });
+          return unwrap(sorted[0]);
+        }
+        if (typeof v === "object" && "value" in (v as Record<string, unknown>)) {
+          return unwrap((v as Record<string, unknown>).value);
+        }
+        return null;
+      };
+      return unwrap(parsed) || "—";
+    } catch {
+      return s;
+    }
+  }
+  return s;
+}
+
 function Field({ label, value }: { label: string; value: string | null }) {
   return (
     <div className="flex justify-between gap-3">
       <span className="text-muted-foreground">{label}</span>
-      <span className="font-medium text-right truncate">{value || "—"}</span>
+      <span className="font-medium text-right truncate">{displayOcr(value)}</span>
     </div>
   );
 }
