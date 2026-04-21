@@ -7,7 +7,8 @@ import { MarketaProvider } from "@/store/marketa";
 import { AuthProvider } from "@/hooks/use-auth";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { VerificationGate } from "@/components/auth/VerificationGate";
-import Index from "./pages/Index.tsx";
+import Landing from "./pages/Landing.tsx";
+import Browse from "./pages/Browse.tsx";
 import ItemDetail from "./pages/ItemDetail.tsx";
 import Sell from "./pages/Sell.tsx";
 import Saved from "./pages/Saved.tsx";
@@ -31,7 +32,8 @@ const App = () => (
           <MarketaProvider>
             <VerificationGate>
               <Routes>
-                <Route path="/" element={<Index />} />
+                <Route path="/" element={<Landing />} />
+                <Route path="/browse" element={<Browse />} />
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/verify" element={<ProtectedRoute><Verify /></ProtectedRoute>} />
                 <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />

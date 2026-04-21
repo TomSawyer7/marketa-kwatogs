@@ -8,7 +8,7 @@ import { useAuth } from "@/hooks/use-auth";
  * - Logged in + not verified: only /verify (and /admin if admin) accessible; everything else redirects to /verify
  * - Logged in + verified: pass-through
  */
-const ALWAYS_ALLOWED = ["/auth"];
+const ALWAYS_ALLOWED = ["/", "/auth"];
 const VERIFY_PATH = "/verify";
 const ADMIN_PATH = "/admin";
 
