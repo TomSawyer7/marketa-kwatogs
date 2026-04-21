@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CheckCircle2, Loader2, ShieldCheck, Upload, Video, AlertTriangle, ArrowRight, RefreshCw, Camera, RotateCw } from "lucide-react";
+import { CheckCircle2, Loader2, ShieldCheck, Video, Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
-import { estimateBlurScore, compressImageToDataUrl, dataUrlSizeBytes } from "@/lib/image-quality";
+import { compressImageToDataUrl } from "@/lib/image-quality";
+import { IDVerification } from "@/components/verify/IDVerification";
 
 type VerifRow = {
   status: "pending" | "id_approved" | "verified" | "rejected" | null;
@@ -29,35 +30,17 @@ type VerifRow = {
   face_match_score: number | null;
 };
 
-const BLUR_THRESHOLD = 60;
-const MAX_ORIGINAL_IMAGE_BYTES = 8 * 1024 * 1024;
-const MAX_EDGE_IMAGE_BYTES = 110 * 1024;
-const MAX_EDGE_REQUEST_BYTES = 320 * 1024;
-
-
-function getIdUploadErrorMessage(message: string) {
-  if (message.includes("Failed to send a request to the Edge Function")) {
-    return "These photos are still too large to upload. Crop closer to the ID or retake them with a lower camera resolution.";
-  }
-  return message;
-}
-
 const Verify = () => {
   const navigate = useNavigate();
   const { user, isVerified, isAdmin, signOut, refreshStatus } = useAuth();
   const [verif, setVerif] = useState<VerifRow | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    document.title = "Verify identity · Marketa";
-  }, []);
+  useEffect(() => { document.title = "Verify identity · Marketa"; }, []);
 
   useEffect(() => {
-    if (!user) {
-      navigate("/auth", { state: { from: "/verify" }, replace: true });
-    } else if (isAdmin) {
-      navigate("/admin", { replace: true });
-    }
+    if (!user) navigate("/auth", { state: { from: "/verify" }, replace: true });
+    else if (isAdmin) navigate("/admin", { replace: true });
   }, [user, isAdmin, navigate]);
 
   const loadStatus = async () => {
@@ -78,7 +61,6 @@ const Verify = () => {
 
   useEffect(() => {
     loadStatus();
-    // poll while pending so admin approval auto-unlocks Step 2
     const id = setInterval(() => {
       setVerif((prev) => {
         if (prev?.status === "pending") loadStatus();
@@ -93,7 +75,6 @@ const Verify = () => {
     return <div className="min-h-screen grid place-items-center text-sm text-muted-foreground">Loading…</div>;
   }
 
-  // Already verified -> redirect into marketplace
   if (isVerified) {
     navigate("/", { replace: true });
     return null;
@@ -117,27 +98,18 @@ const Verify = () => {
         <Stepper status={status} />
 
         <div className="mt-6 space-y-6">
-          {/* STEP 1 */}
           {(status === null || status === "rejected") && (
-            <Step1Upload
-              onSubmitted={loadStatus}
-              previousNotes={status === "rejected" ? verif?.admin_notes ?? null : null}
-            />
+            <IDVerification onSubmitted={loadStatus} />
           )}
 
-          {status === "pending" && <PendingPanel verif={verif!} userId={user.id} onRetry={loadStatus} />}
+          {status === "pending" && (
+            <PendingPanel verif={verif!} />
+          )}
 
-          {/* STEP 2 */}
           {status === "id_approved" && (
-            <Step2Liveness
-              onPassed={async () => {
-                await refreshStatus();
-                await loadStatus();
-              }}
-            />
+            <Step2Liveness onPassed={async () => { await refreshStatus(); await loadStatus(); }} />
           )}
 
-          {/* STEP 3 — verified handled by redirect, but show success briefly if status flips */}
           {status === "verified" && <SuccessPanel score={verif?.face_match_score ?? 100} />}
         </div>
 
@@ -154,7 +126,6 @@ const Verify = () => {
 export default Verify;
 
 /* -------------------------------- Stepper --------------------------------- */
-
 function Stepper({ status }: { status: VerifRow["status"] }) {
   const steps = [
     { key: "id", label: "ID Upload" },
@@ -189,271 +160,27 @@ function Stepper({ status }: { status: VerifRow["status"] }) {
   );
 }
 
-/* ------------------------------ STEP 1: Upload ---------------------------- */
-
-function Step1Upload({ onSubmitted, previousNotes }: { onSubmitted: () => void; previousNotes: string | null }) {
-  const [front, setFront] = useState<File | null>(null);
-  const [back, setBack] = useState<File | null>(null);
-  const [frontPreview, setFrontPreview] = useState<string | null>(null);
-  const [backPreview, setBackPreview] = useState<string | null>(null);
-  const [frontRot, setFrontRot] = useState(0);
-  const [backRot, setBackRot] = useState(0);
-  const [frontBlur, setFrontBlur] = useState<number | null>(null);
-  const [backBlur, setBackBlur] = useState<number | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [serverError, setServerError] = useState<string | null>(null);
-
-  const handlePick = async (side: "front" | "back", file: File) => {
-    if (!file.type.startsWith("image/")) {
-      toast.error("Please choose an image file.");
-      return;
-    }
-    if (file.size > MAX_ORIGINAL_IMAGE_BYTES) {
-      toast.error("Image must be under 8 MB.");
-      return;
-    }
-    // Build EXIF-corrected preview so users see the same orientation
-    // that gets sent to OCR.
-    let previewUrl: string;
-    try {
-      previewUrl = await compressImageToDataUrl(file, {
-        maxDim: 720,
-        quality: 0.78,
-        maxBytes: 250 * 1024,
-        minDim: 480,
-        minQuality: 0.5,
-      });
-    } catch {
-      previewUrl = URL.createObjectURL(file);
-    }
-    if (side === "front") {
-      setFront(file); setFrontPreview(previewUrl); setFrontRot(0);
-    } else {
-      setBack(file); setBackPreview(previewUrl); setBackRot(0);
-    }
-    try {
-      const score = await estimateBlurScore(file);
-      if (side === "front") setFrontBlur(score);
-      else setBackBlur(score);
-    } catch {
-      // ignore
-    }
-  };
-
-  const frontBlurry = frontBlur !== null && frontBlur < BLUR_THRESHOLD;
-  const backBlurry = backBlur !== null && backBlur < BLUR_THRESHOLD;
-  const ready = front && back && !frontBlurry && !backBlurry;
-
-  const submit = async () => {
-    if (!front || !back) return;
-    setSubmitting(true); setServerError(null);
-    try {
-      const [frontData, backData] = await Promise.all([
-        compressImageToDataUrl(front, {
-          maxDim: 840, quality: 0.68, maxBytes: MAX_EDGE_IMAGE_BYTES,
-          minDim: 520, minQuality: 0.34, rotateDeg: frontRot,
-        }),
-        compressImageToDataUrl(back, {
-          maxDim: 840, quality: 0.68, maxBytes: MAX_EDGE_IMAGE_BYTES,
-          minDim: 520, minQuality: 0.34, rotateDeg: backRot,
-        }),
-      ]);
-      const payload = { frontImage: frontData, backImage: backData };
-      const requestBytes = new Blob([JSON.stringify(payload)]).size;
-      if (
-        dataUrlSizeBytes(frontData) > MAX_EDGE_IMAGE_BYTES ||
-        dataUrlSizeBytes(backData) > MAX_EDGE_IMAGE_BYTES ||
-        requestBytes > MAX_EDGE_REQUEST_BYTES
-      ) {
-        const msg = "These photos are too large to upload. Crop closer to the ID or retake them with a lower camera resolution.";
-        setServerError(msg);
-        toast.error(msg);
-        return;
-      }
-      const { data, error } = await supabase.functions.invoke("verify-id-ocr", {
-        body: payload,
-      });
-      if (error) {
-        const msg = getIdUploadErrorMessage((data as { error?: string } | undefined)?.error ?? error.message ?? "Submission failed.");
-        setServerError(msg);
-        toast.error(msg);
-        return;
-      }
-      toast.success("ID submitted. Awaiting admin review.");
-      onSubmitted();
-    } catch (e) {
-      const msg = getIdUploadErrorMessage(e instanceof Error ? e.message : "Submission failed.");
-      setServerError(msg);
-      toast.error(msg);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <section className="bg-card border border-border rounded-xl p-6 md:p-8">
-      <div className="flex items-start gap-3 mb-5">
-        <div className="h-9 w-9 rounded-full bg-primary/10 text-primary grid place-items-center"><Upload className="h-4 w-4" /></div>
-        <div>
-          <h2 className="font-semibold">Step 1 · Upload your Philippine National ID</h2>
-          <p className="text-sm text-muted-foreground">Take clear, well-lit photos of the front and back. Use the rotate button if a photo isn't upright.</p>
-        </div>
-      </div>
-
-      {previousNotes && (
-        <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm mb-4">
-          <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
-          <div>
-            <p className="font-medium text-destructive">Previous submission was rejected</p>
-            <p className="text-muted-foreground">{previousNotes}</p>
-          </div>
-        </div>
-      )}
-
-      <div className="grid sm:grid-cols-2 gap-4">
-        <UploadSlot
-          label="Front of ID"
-          preview={frontPreview}
-          rotation={frontRot}
-          blurScore={frontBlur}
-          onPick={(f) => handlePick("front", f)}
-          onRotate={() => setFrontRot((r) => (r + 90) % 360)}
-        />
-        <UploadSlot
-          label="Back of ID"
-          preview={backPreview}
-          rotation={backRot}
-          blurScore={backBlur}
-          onPick={(f) => handlePick("back", f)}
-          onRotate={() => setBackRot((r) => (r + 90) % 360)}
-        />
-      </div>
-
-      {(frontBlurry || backBlurry) && (
-        <div className="mt-4 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm">
-          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
-          <div className="flex-1">
-            <p className="font-medium">Image too blurred</p>
-            <p className="text-muted-foreground">Re-take the {frontBlurry && backBlurry ? "front and back" : frontBlurry ? "front" : "back"} in better lighting and hold the camera steady.</p>
-          </div>
-          <Button variant="outline" size="sm" onClick={() => { setFront(null); setFrontPreview(null); setFrontBlur(null); setFrontRot(0); setBack(null); setBackPreview(null); setBackBlur(null); setBackRot(0); }}>
-            <RefreshCw className="h-3.5 w-3.5 mr-1" /> Retry
-          </Button>
-        </div>
-      )}
-
-      {serverError && (
-        <p className="mt-3 text-sm text-destructive">{serverError}</p>
-      )}
-
-      <Button className="w-full mt-5" disabled={!ready || submitting} onClick={submit}>
-        {submitting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Analyzing ID…</> : <>Submit for review <ArrowRight className="h-4 w-4 ml-2" /></>}
-      </Button>
-    </section>
-  );
-}
-
-function UploadSlot({
-  label, preview, rotation, blurScore, onPick, onRotate,
-}: {
-  label: string;
-  preview: string | null;
-  rotation: number;
-  blurScore: number | null;
-  onPick: (f: File) => void;
-  onRotate: () => void;
-}) {
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  return (
-    <div>
-      <label className="text-sm font-medium block mb-1.5">{label}</label>
-      <button
-        type="button"
-        onClick={() => inputRef.current?.click()}
-        className="relative w-full aspect-[1.6] rounded-lg border-2 border-dashed border-border bg-secondary/40 hover:border-primary hover:bg-secondary transition overflow-hidden grid place-items-center text-xs text-muted-foreground"
-      >
-        {preview ? (
-          <img
-            src={preview}
-            alt={label}
-            className="absolute inset-0 w-full h-full object-contain transition-transform"
-            style={{ transform: `rotate(${rotation}deg)` }}
-          />
-        ) : (
-          <div className="flex flex-col items-center gap-1">
-            <Upload className="h-5 w-5" />
-            <span>Click to upload</span>
-          </div>
-        )}
-      </button>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        onChange={(e) => { const f = e.target.files?.[0]; if (f) onPick(f); e.target.value = ""; }}
-      />
-      <div className="flex items-center justify-between mt-1.5 gap-2">
-        {blurScore !== null ? (
-          <p className={`text-xs ${blurScore < BLUR_THRESHOLD ? "text-destructive" : "text-muted-foreground"}`}>
-            Sharpness: {Math.round(blurScore)} {blurScore < BLUR_THRESHOLD ? "· too blurry" : "· OK"}
-          </p>
-        ) : <span className="text-xs text-muted-foreground">&nbsp;</span>}
-        {preview && (
-          <Button type="button" variant="outline" size="sm" onClick={onRotate} className="h-7 px-2 text-xs">
-            <RotateCw className="h-3.5 w-3.5 mr-1" /> Rotate 90°
-          </Button>
-        )}
-      </div>
-    </div>
-  );
-}
-
 /* --------------------------- Pending Approval ---------------------------- */
-
-function PendingPanel({ verif, userId, onRetry }: { verif: VerifRow; userId: string; onRetry: () => void }) {
-  const [confirmed, setConfirmed] = useState(false);
-  const [busy, setBusy] = useState(false);
-
-  const discardAndRetry = async () => {
-    setBusy(true);
-    try {
-      const { error } = await supabase.from("verifications").delete().eq("user_id", userId);
-      if (error) throw error;
-      toast.success("Submission discarded. Please re-upload your ID.");
-      onRetry();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not discard submission.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
+function PendingPanel({ verif }: { verif: VerifRow }) {
   return (
     <section className="bg-card border border-border rounded-xl p-6 md:p-8">
       <div className="text-center">
         <div className="mx-auto h-12 w-12 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 grid place-items-center mb-3">
-          {confirmed ? <Loader2 className="h-6 w-6 animate-spin" /> : <ShieldCheck className="h-6 w-6" />}
+          <Loader2 className="h-6 w-6 animate-spin" />
         </div>
-        <h2 className="font-semibold">
-          {confirmed ? "Pending admin approval" : "Review your extracted details"}
-        </h2>
+        <h2 className="font-semibold">Pending admin approval</h2>
         <p className="text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
-          {confirmed
-            ? "We've sent your ID to an administrator. This page will refresh automatically once reviewed."
-            : "Please verify everything below is correct before sending to the admin for approval."}
+          Your ID has been submitted. This page refreshes automatically once an admin reviews it.
         </p>
       </div>
 
       <div className="mt-5 text-left bg-secondary/50 rounded-lg p-4 text-sm space-y-1.5">
-        <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Extracted details</p>
+        <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Submitted details</p>
         <Field label="Full name" value={verif.ocr_full_name} />
         <Field label="First name" value={verif.ocr_first_name} />
         <Field label="Middle name" value={verif.ocr_middle_name} />
         <Field label="Last name" value={verif.ocr_last_name} />
-        <Field label="Document number" value={verif.ocr_document_number} />
-        <Field label="PSN" value={verif.ocr_psn} />
+        <Field label="Document number" value={verif.ocr_document_number ?? verif.ocr_psn} />
         <Field label="Date of birth" value={verif.ocr_date_of_birth} />
         <Field label="Sex" value={verif.ocr_sex ?? verif.ocr_gender} />
         <Field label="Nationality" value={verif.ocr_nationality} />
@@ -463,77 +190,21 @@ function PendingPanel({ verif, userId, onRetry }: { verif: VerifRow; userId: str
         <Field label="Marital status" value={verif.ocr_marital_status} />
         <Field label="Date of issue" value={verif.ocr_date_of_issue} />
       </div>
-
-      {!confirmed && (
-        <div className="mt-5 flex flex-col sm:flex-row gap-2">
-          <Button
-            variant="outline"
-            className="flex-1"
-            disabled={busy}
-            onClick={discardAndRetry}
-          >
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Retry upload
-          </Button>
-          <Button
-            className="flex-1"
-            disabled={busy}
-            onClick={() => {
-              setConfirmed(true);
-              toast.success("Details confirmed. Awaiting admin approval.");
-            }}
-          >
-            <CheckCircle2 className="h-4 w-4 mr-2" />
-            Confirm details
-          </Button>
-        </div>
-      )}
     </section>
   );
 }
-/** Defensive: unwrap legacy rows where value was stored as `[{value,...}]` JSON. */
-function displayOcr(value: string | null): string {
-  if (!value) return "—";
-  const s = String(value).trim();
-  if (!s) return "—";
-  if (s.startsWith("[") || s.startsWith("{")) {
-    try {
-      const parsed = JSON.parse(s);
-      const unwrap = (v: unknown): string | null => {
-        if (v == null) return null;
-        if (typeof v === "string") return v;
-        if (Array.isArray(v)) {
-          const sorted = [...v].sort((a, b) => {
-            const ca = typeof a === "object" && a && "confidence" in a ? Number((a as Record<string, unknown>).confidence) || 0 : 0;
-            const cb = typeof b === "object" && b && "confidence" in b ? Number((b as Record<string, unknown>).confidence) || 0 : 0;
-            return cb - ca;
-          });
-          return unwrap(sorted[0]);
-        }
-        if (typeof v === "object" && "value" in (v as Record<string, unknown>)) {
-          return unwrap((v as Record<string, unknown>).value);
-        }
-        return null;
-      };
-      return unwrap(parsed) || "—";
-    } catch {
-      return s;
-    }
-  }
-  return s;
-}
 
 function Field({ label, value }: { label: string; value: string | null }) {
+  const display = value && String(value).trim() ? String(value) : "—";
   return (
     <div className="flex justify-between gap-3">
       <span className="text-muted-foreground">{label}</span>
-      <span className="font-medium text-right truncate">{displayOcr(value)}</span>
+      <span className="font-medium text-right break-words">{display}</span>
     </div>
   );
 }
 
 /* ----------------------------- STEP 2: Liveness --------------------------- */
-
 const ACTIONS: Array<{ key: "blink" | "turn_head" | "smile"; label: string; instruction: string }> = [
   { key: "blink", label: "Blink", instruction: "Look at the camera and blink slowly twice." },
   { key: "turn_head", label: "Turn head", instruction: "Slowly turn your head left, then right." },
@@ -579,18 +250,13 @@ function Step2Liveness({ onPassed }: { onPassed: () => void }) {
     const ctx = c.getContext("2d")!;
     ctx.drawImage(v, 0, 0);
     return compressImageToDataUrl(c.toDataURL("image/jpeg", 0.82), {
-      maxDim: 640,
-      quality: 0.62,
-      maxBytes: 90 * 1024,
-      minDim: 420,
-      minQuality: 0.4,
+      maxDim: 640, quality: 0.62, maxBytes: 90 * 1024, minDim: 420, minQuality: 0.4,
     });
   };
 
   const runCapture = async () => {
     if (!streamOn) { await startCamera(); return; }
     setPhase("recording"); setResult(null);
-    // capture 3 frames, ~1.2s apart
     const frames: string[] = [];
     for (let i = 3; i > 0; i--) {
       setCountdown(i);
@@ -685,7 +351,6 @@ function Step2Liveness({ onPassed }: { onPassed: () => void }) {
 }
 
 /* -------------------------------- Success --------------------------------- */
-
 function SuccessPanel({ score }: { score: number }) {
   return (
     <section className="bg-card border border-emerald-500/30 rounded-xl p-8 text-center animate-scale-in">
