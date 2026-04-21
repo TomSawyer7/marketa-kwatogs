@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CheckCircle2, Loader2, ShieldCheck, Upload, Video, AlertTriangle, ArrowRight, RefreshCw, Camera } from "lucide-react";
+import { CheckCircle2, Loader2, ShieldCheck, Upload, Video, AlertTriangle, ArrowRight, RefreshCw, Camera, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
