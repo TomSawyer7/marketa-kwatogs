@@ -205,6 +205,7 @@ const Auth = () => {
                     value={signup.password}
                     onChange={(e) => setSignup((p) => ({ ...p, password: e.target.value }))}
                   />
+                  <PasswordStrengthMeter password={signup.password} />
                   {errors.password && <p className="text-xs text-destructive mt-1">{errors.password}</p>}
                 </div>
                 <div>
