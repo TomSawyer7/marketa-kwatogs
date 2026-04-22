@@ -144,7 +144,15 @@ const Auth = () => {
                   {errors.email && <p className="text-xs text-destructive mt-1">{errors.email}</p>}
                 </div>
                 <div>
-                  <Label htmlFor="login-password">Password</Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="login-password">Password</Label>
+                    <Link
+                      to="/forgot-password"
+                      className="text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      Forgot password?
+                    </Link>
+                  </div>
                   <Input
                     id="login-password" type="password" autoComplete="current-password" maxLength={72}
                     value={login.password}
