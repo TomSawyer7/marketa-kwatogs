@@ -20,7 +20,14 @@ const signupSchema = z
     firstName: z.string().trim().min(1, "First name is required").max(40),
     lastName: z.string().trim().min(1, "Last name is required").max(40),
     email: z.string().trim().email("Enter a valid email").max(120),
-    password: z.string().min(8, "Password must be at least 8 characters").max(72),
+    password: z
+      .string()
+      .min(8, "Password must be at least 8 characters")
+      .max(72)
+      .regex(/[A-Z]/, "Password must contain an uppercase letter")
+      .regex(/[a-z]/, "Password must contain a lowercase letter")
+      .regex(/\d/, "Password must contain a number")
+      .regex(/[^A-Za-z0-9]/, "Password must contain a special character"),
     confirm: z.string(),
   })
   .refine((d) => d.password === d.confirm, {
