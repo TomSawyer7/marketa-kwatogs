@@ -62,8 +62,10 @@ export type Database = {
           bio: string | null
           created_at: string
           email: string | null
+          first_name: string | null
           id: string
           is_verified: boolean
+          last_name: string | null
           location: string | null
           name: string | null
           notifications: Json
@@ -75,8 +77,10 @@ export type Database = {
           bio?: string | null
           created_at?: string
           email?: string | null
+          first_name?: string | null
           id: string
           is_verified?: boolean
+          last_name?: string | null
           location?: string | null
           name?: string | null
           notifications?: Json
@@ -88,8 +92,10 @@ export type Database = {
           bio?: string | null
           created_at?: string
           email?: string | null
+          first_name?: string | null
           id?: string
           is_verified?: boolean
+          last_name?: string | null
           location?: string | null
           name?: string | null
           notifications?: Json
