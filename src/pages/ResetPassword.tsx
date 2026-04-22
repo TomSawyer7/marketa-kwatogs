@@ -42,6 +42,11 @@ const ResetPassword = () => {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
 
+  const allRulesPass = useMemo(
+    () => passwordRules.every((r) => r.test(form.password)),
+    [form.password],
+  );
+
   useEffect(() => {
     document.title = "Reset password · Marketa";
   }, []);
