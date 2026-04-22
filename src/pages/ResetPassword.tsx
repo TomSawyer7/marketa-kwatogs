@@ -1,17 +1,31 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { z } from "zod";
-import { Store } from "lucide-react";
+import { Check, Store, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { cn } from "@/lib/utils";
+
+const passwordRules = [
+  { id: "length", label: "At least 8 characters", test: (v: string) => v.length >= 8 },
+  { id: "upper", label: "One uppercase letter (A–Z)", test: (v: string) => /[A-Z]/.test(v) },
+  { id: "lower", label: "One lowercase letter (a–z)", test: (v: string) => /[a-z]/.test(v) },
+  { id: "number", label: "One number (0–9)", test: (v: string) => /\d/.test(v) },
+  { id: "special", label: "One special character (!@#$…)", test: (v: string) => /[^A-Za-z0-9]/.test(v) },
+] as const;
 
 const schema = z
   .object({
-    password: z.string().min(8, "Password must be at least 8 characters").max(72),
+    password: z
+      .string()
+      .max(72, "Password is too long")
+      .refine((v) => passwordRules.every((r) => r.test(v)), {
+        message: "Password does not meet all requirements",
+      }),
     confirm: z.string(),
   })
   .refine((d) => d.password === d.confirm, {
