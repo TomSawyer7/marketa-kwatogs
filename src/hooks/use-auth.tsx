@@ -74,7 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (email: string, password: string, firstName: string, lastName: string) => {
       const redirectUrl = `${window.location.origin}/`;
       const fullName = `${firstName} ${lastName}`.trim();
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -86,7 +86,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           },
         },
       });
-      return { error: error?.message ?? null };
+      if (error) return { error: error.message };
+      // With "User Enumeration Protection" enabled, Supabase returns a fake
+      // user with an empty identities array when the email is already taken.
+      if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+        return { error: "That email is already registered." };
+      }
+      return { error: null };
     },
     [],
   );
