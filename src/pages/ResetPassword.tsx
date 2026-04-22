@@ -112,7 +112,7 @@ const ResetPassword = () => {
           </p>
 
           {ready && (
-            <form onSubmit={onSubmit} className="space-y-4 mt-6">
+            <form onSubmit={onSubmit} className="space-y-4 mt-6" noValidate>
               <div>
                 <Label htmlFor="rp-password">New password</Label>
                 <Input
@@ -122,7 +122,30 @@ const ResetPassword = () => {
                   maxLength={72}
                   value={form.password}
                   onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))}
+                  aria-invalid={!!errors.password}
+                  aria-describedby="rp-password-rules"
                 />
+                <ul id="rp-password-rules" className="mt-2 space-y-1">
+                  {passwordRules.map((r) => {
+                    const ok = r.test(form.password);
+                    return (
+                      <li
+                        key={r.id}
+                        className={cn(
+                          "flex items-center gap-2 text-xs",
+                          ok ? "text-foreground" : "text-muted-foreground",
+                        )}
+                      >
+                        {ok ? (
+                          <Check className="h-3.5 w-3.5 text-primary" aria-hidden />
+                        ) : (
+                          <X className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+                        )}
+                        <span>{r.label}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
                 {errors.password && <p className="text-xs text-destructive mt-1">{errors.password}</p>}
               </div>
               <div>
@@ -134,10 +157,18 @@ const ResetPassword = () => {
                   maxLength={72}
                   value={form.confirm}
                   onChange={(e) => setForm((p) => ({ ...p, confirm: e.target.value }))}
+                  aria-invalid={!!errors.confirm || (!!form.confirm && form.confirm !== form.password)}
                 />
+                {form.confirm && form.confirm !== form.password && !errors.confirm && (
+                  <p className="text-xs text-destructive mt-1">Passwords do not match</p>
+                )}
                 {errors.confirm && <p className="text-xs text-destructive mt-1">{errors.confirm}</p>}
               </div>
-              <Button type="submit" className="w-full" disabled={busy}>
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={busy || !allRulesPass || form.password !== form.confirm}
+              >
                 {busy ? "Updating…" : "Update password"}
               </Button>
             </form>
