@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import PasswordStrengthMeter from "@/components/auth/PasswordStrengthMeter";
 import { useAuth } from "@/hooks/use-auth";
 
 const loginSchema = z.object({
@@ -204,6 +205,7 @@ const Auth = () => {
                     value={signup.password}
                     onChange={(e) => setSignup((p) => ({ ...p, password: e.target.value }))}
                   />
+                  <PasswordStrengthMeter password={signup.password} />
                   {errors.password && <p className="text-xs text-destructive mt-1">{errors.password}</p>}
                 </div>
                 <div>
