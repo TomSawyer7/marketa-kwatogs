@@ -10,7 +10,14 @@ type AuthCtx = {
   isAdmin: boolean;
   refreshStatus: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
-  signUp: (email: string, password: string, name: string) => Promise<{ error: string | null }>;
+  signUp: (
+    email: string,
+    password: string,
+    firstName: string,
+    lastName: string,
+  ) => Promise<{ error: string | null }>;
+  resetPassword: (email: string) => Promise<{ error: string | null }>;
+  updatePassword: (password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 };
 
@@ -63,13 +70,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: error?.message ?? null };
   }, []);
 
-  const signUp = useCallback(async (email: string, password: string, name: string) => {
-    const redirectUrl = `${window.location.origin}/`;
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { emailRedirectTo: redirectUrl, data: { name } },
+  const signUp = useCallback(
+    async (email: string, password: string, firstName: string, lastName: string) => {
+      const redirectUrl = `${window.location.origin}/`;
+      const fullName = `${firstName} ${lastName}`.trim();
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: redirectUrl,
+          data: {
+            first_name: firstName,
+            last_name: lastName,
+            name: fullName,
+          },
+        },
+      });
+      return { error: error?.message ?? null };
+    },
+    [],
+  );
+
+  const resetPassword = useCallback(async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
     });
+    return { error: error?.message ?? null };
+  }, []);
+
+  const updatePassword = useCallback(async (password: string) => {
+    const { error } = await supabase.auth.updateUser({ password });
     return { error: error?.message ?? null };
   }, []);
 
@@ -78,7 +108,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <Ctx.Provider value={{ user, session, loading, isVerified, isAdmin, refreshStatus, signIn, signUp, signOut }}>
+    <Ctx.Provider
+      value={{
+        user,
+        session,
+        loading,
+        isVerified,
+        isAdmin,
+        refreshStatus,
+        signIn,
+        signUp,
+        resetPassword,
+        updatePassword,
+        signOut,
+      }}
+    >
       {children}
     </Ctx.Provider>
   );

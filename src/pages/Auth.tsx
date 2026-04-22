@@ -16,7 +16,8 @@ const loginSchema = z.object({
 
 const signupSchema = z
   .object({
-    name: z.string().trim().min(2, "Name must be at least 2 characters").max(60),
+    firstName: z.string().trim().min(1, "First name is required").max(40),
+    lastName: z.string().trim().min(1, "Last name is required").max(40),
     email: z.string().trim().email("Enter a valid email").max(120),
     password: z.string().min(8, "Password must be at least 8 characters").max(72),
     confirm: z.string(),
@@ -35,7 +36,13 @@ const Auth = () => {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const [login, setLogin] = useState({ email: "", password: "" });
-  const [signup, setSignup] = useState({ name: "", email: "", password: "", confirm: "" });
+  const [signup, setSignup] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    password: "",
+    confirm: "",
+  });
 
   const from = (location.state as { from?: string } | null)?.from ?? "/";
 
@@ -86,7 +93,12 @@ const Auth = () => {
     }
     setErrors({});
     setBusy(true);
-    const { error } = await signUp(parsed.data.email, parsed.data.password, parsed.data.name);
+    const { error } = await signUp(
+      parsed.data.email,
+      parsed.data.password,
+      parsed.data.firstName,
+      parsed.data.lastName,
+    );
     setBusy(false);
     if (error) {
       const msg = /already/i.test(error) ? "That email is already registered." : error;
@@ -148,14 +160,25 @@ const Auth = () => {
 
             <TabsContent value="signup" className="mt-5">
               <form onSubmit={onSignup} className="space-y-4">
-                <div>
-                  <Label htmlFor="signup-name">Full name</Label>
-                  <Input
-                    id="signup-name" autoComplete="name" maxLength={60}
-                    value={signup.name}
-                    onChange={(e) => setSignup((p) => ({ ...p, name: e.target.value }))}
-                  />
-                  {errors.name && <p className="text-xs text-destructive mt-1">{errors.name}</p>}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label htmlFor="signup-first">First name</Label>
+                    <Input
+                      id="signup-first" autoComplete="given-name" maxLength={40}
+                      value={signup.firstName}
+                      onChange={(e) => setSignup((p) => ({ ...p, firstName: e.target.value }))}
+                    />
+                    {errors.firstName && <p className="text-xs text-destructive mt-1">{errors.firstName}</p>}
+                  </div>
+                  <div>
+                    <Label htmlFor="signup-last">Last name</Label>
+                    <Input
+                      id="signup-last" autoComplete="family-name" maxLength={40}
+                      value={signup.lastName}
+                      onChange={(e) => setSignup((p) => ({ ...p, lastName: e.target.value }))}
+                    />
+                    {errors.lastName && <p className="text-xs text-destructive mt-1">{errors.lastName}</p>}
+                  </div>
                 </div>
                 <div>
                   <Label htmlFor="signup-email">Email</Label>
