@@ -144,8 +144,14 @@ const Auth = () => {
                   {errors.email && <p className="text-xs text-destructive mt-1">{errors.email}</p>}
                 </div>
                 <div>
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="login-password">Password</Label>
+                  <Label htmlFor="login-password">Password</Label>
+                  <Input
+                    id="login-password" type="password" autoComplete="current-password" maxLength={72}
+                    value={login.password}
+                    onChange={(e) => setLogin((p) => ({ ...p, password: e.target.value }))}
+                  />
+                  {errors.password && <p className="text-xs text-destructive mt-1">{errors.password}</p>}
+                  <div className="mt-1.5 text-right">
                     <Link
                       to="/forgot-password"
                       className="text-xs text-muted-foreground hover:text-foreground"
@@ -153,12 +159,6 @@ const Auth = () => {
                       Forgot password?
                     </Link>
                   </div>
-                  <Input
-                    id="login-password" type="password" autoComplete="current-password" maxLength={72}
-                    value={login.password}
-                    onChange={(e) => setLogin((p) => ({ ...p, password: e.target.value }))}
-                  />
-                  {errors.password && <p className="text-xs text-destructive mt-1">{errors.password}</p>}
                 </div>
                 <Button type="submit" className="w-full" disabled={busy}>
                   {busy ? "Logging in…" : "Log in"}
