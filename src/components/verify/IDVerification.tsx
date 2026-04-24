@@ -220,6 +220,8 @@ export function IDVerification({ onSubmitted }: { onSubmitted: () => void }) {
         ocr_blood_type: extracted.blood_type || null,
         ocr_marital_status: extracted.marital_status || null,
         ocr_date_of_issue: toIsoDate(extracted.date_of_issue),
+        qr_payload: extracted.qr_payload || null,
+        everify_status: "not_checked",
         liveness_passed: false,
         face_match_score: null,
         admin_notes: null,
