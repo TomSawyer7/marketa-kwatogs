@@ -154,6 +154,10 @@ export type Database = {
       verifications: {
         Row: {
           admin_notes: string | null
+          everify_checked_at: string | null
+          everify_checked_by: string | null
+          everify_notes: string | null
+          everify_status: string
           face_match_score: number | null
           id_approved_at: string | null
           id_approved_by: string | null
@@ -175,6 +179,7 @@ export type Database = {
           ocr_place_of_birth: string | null
           ocr_psn: string | null
           ocr_sex: string | null
+          qr_payload: string | null
           status: string
           submitted_at: string
           updated_at: string
@@ -183,6 +188,10 @@ export type Database = {
         }
         Insert: {
           admin_notes?: string | null
+          everify_checked_at?: string | null
+          everify_checked_by?: string | null
+          everify_notes?: string | null
+          everify_status?: string
           face_match_score?: number | null
           id_approved_at?: string | null
           id_approved_by?: string | null
@@ -204,6 +213,7 @@ export type Database = {
           ocr_place_of_birth?: string | null
           ocr_psn?: string | null
           ocr_sex?: string | null
+          qr_payload?: string | null
           status?: string
           submitted_at?: string
           updated_at?: string
@@ -212,6 +222,10 @@ export type Database = {
         }
         Update: {
           admin_notes?: string | null
+          everify_checked_at?: string | null
+          everify_checked_by?: string | null
+          everify_notes?: string | null
+          everify_status?: string
           face_match_score?: number | null
           id_approved_at?: string | null
           id_approved_by?: string | null
@@ -233,6 +247,7 @@ export type Database = {
           ocr_place_of_birth?: string | null
           ocr_psn?: string | null
           ocr_sex?: string | null
+          qr_payload?: string | null
           status?: string
           submitted_at?: string
           updated_at?: string
