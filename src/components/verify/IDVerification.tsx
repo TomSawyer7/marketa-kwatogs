@@ -41,6 +41,18 @@ async function scanID(frontFile: File, backFile: File) {
 
   const d = data.data
 
+  // Capture raw QR payload from the back of the ID (used later for eVerify.gov.ph)
+  let qrPayload = ""
+  try {
+    const barcodes = d.barcode
+    if (barcodes && Array.isArray(barcodes)) {
+      for (const bc of barcodes) {
+        const raw = bc?.value
+        if (raw && String(raw).trim() !== "") { qrPayload = String(raw); break }
+      }
+    }
+  } catch { /* noop */ }
+
   let firstName      = d.firstName?.[0]?.value      || ""
   let middleName     = d.middleName?.[0]?.value     || ""
   let lastName       = d.lastName?.[0]?.value       || ""
@@ -106,7 +118,8 @@ async function scanID(frontFile: File, backFile: File) {
     marital_status:  maritalStatus,
     date_of_issue:   dateOfIssue,
     date_of_expiry:  dateOfExpiry,
-    face_image:      data.face || ""
+    face_image:      data.face || "",
+    qr_payload:      qrPayload,
   }
 }
 /* ========================================================================== */
@@ -207,6 +220,8 @@ export function IDVerification({ onSubmitted }: { onSubmitted: () => void }) {
         ocr_blood_type: extracted.blood_type || null,
         ocr_marital_status: extracted.marital_status || null,
         ocr_date_of_issue: toIsoDate(extracted.date_of_issue),
+        qr_payload: extracted.qr_payload || null,
+        everify_status: "not_checked",
         liveness_passed: false,
         face_match_score: null,
         admin_notes: null,
