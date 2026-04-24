@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
     if (body.action === "list") {
       const { data, error } = await admin
         .from("verifications")
-        .select("user_id, status, ocr_full_name, ocr_date_of_birth, ocr_gender, ocr_psn, ocr_address, id_front_path, id_back_path, face_match_score, liveness_passed, admin_notes, submitted_at, verified_at")
+        .select("user_id, status, ocr_full_name, ocr_date_of_birth, ocr_gender, ocr_psn, ocr_address, id_front_path, id_back_path, face_match_score, liveness_passed, admin_notes, submitted_at, verified_at, qr_payload, everify_status, everify_checked_at, everify_notes")
         .order("submitted_at", { ascending: false });
 
       if (error) throw error;
