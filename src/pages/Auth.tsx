@@ -230,10 +230,7 @@ const Auth = () => {
               </form>
             </TabsContent>
           </Tabs>
-
-          <p className="text-xs text-muted-foreground text-center mt-6">
-            By continuing, you agree to Marketa's Terms and Privacy Policy.
-          </p>
+          </replace_marker_unused>
         </div>
 
         <div className="text-center mt-4">
