@@ -52,14 +52,9 @@ export default function Landing() {
 
           <nav className="flex items-center gap-2">
             {!user && (
-              <>
-                <Button asChild variant="ghost" size="sm" className="rounded-md h-9 px-4 text-foreground/80">
-                  <Link to="/auth">Log in</Link>
-                </Button>
-                <Button asChild size="sm" className="rounded-md h-9 px-4 bg-primary text-primary-foreground hover:bg-primary-hover">
-                  <Link to="/auth">Sign up</Link>
-                </Button>
-              </>
+              <Button asChild variant="ghost" size="sm" className="rounded-md h-9 px-4 text-foreground/80">
+                <Link to="/auth">Log in</Link>
+              </Button>
             )}
           </nav>
         </div>
@@ -95,16 +90,11 @@ export default function Landing() {
                   </Link>
                 </Button>
               ) : (
-                <>
-                  <Button asChild size="lg" className="rounded-md h-12 px-6 bg-primary text-primary-foreground hover:bg-primary-hover">
-                    <Link to="/auth">
-                      Get Started <ArrowRight className="h-4 w-4" />
-                    </Link>
-                  </Button>
-                  <Button asChild variant="outline" size="lg" className="rounded-md h-12 px-6 bg-card border-primary/30 text-primary hover:bg-primary-soft">
-                    <Link to="/auth">Sign In</Link>
-                  </Button>
-                </>
+                <Button asChild size="lg" className="rounded-md h-12 px-6 bg-primary text-primary-foreground hover:bg-primary-hover">
+                  <Link to="/auth">
+                    Get Started <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </Button>
               )}
             </div>
           </div>
