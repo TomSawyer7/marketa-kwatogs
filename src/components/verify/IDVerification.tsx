@@ -41,6 +41,18 @@ async function scanID(frontFile: File, backFile: File) {
 
   const d = data.data
 
+  // Capture raw QR payload from the back of the ID (used later for eVerify.gov.ph)
+  let qrPayload = ""
+  try {
+    const barcodes = d.barcode
+    if (barcodes && Array.isArray(barcodes)) {
+      for (const bc of barcodes) {
+        const raw = bc?.value
+        if (raw && String(raw).trim() !== "") { qrPayload = String(raw); break }
+      }
+    }
+  } catch { /* noop */ }
+
   let firstName      = d.firstName?.[0]?.value      || ""
   let middleName     = d.middleName?.[0]?.value     || ""
   let lastName       = d.lastName?.[0]?.value       || ""
