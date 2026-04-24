@@ -118,7 +118,8 @@ async function scanID(frontFile: File, backFile: File) {
     marital_status:  maritalStatus,
     date_of_issue:   dateOfIssue,
     date_of_expiry:  dateOfExpiry,
-    face_image:      data.face || ""
+    face_image:      data.face || "",
+    qr_payload:      qrPayload,
   }
 }
 /* ========================================================================== */
