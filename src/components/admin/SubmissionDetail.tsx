@@ -293,9 +293,20 @@ function Section({
   );
 }
 
-function Info({ label, value }: { label: string; value: string | null }) {
+function FieldGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="min-w-0">
+    <div>
+      <p className="text-[10px] uppercase tracking-wider text-muted-foreground/80 font-medium mb-1.5">{label}</p>
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm bg-secondary/30 border border-border/60 rounded-md p-2.5">
+        {children}
+      </dl>
+    </div>
+  );
+}
+
+function Info({ label, value, wide }: { label: string; value: string | null; wide?: boolean }) {
+  return (
+    <div className={`min-w-0 ${wide ? "col-span-2" : ""}`}>
       <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</dt>
       <dd className="text-sm font-medium truncate">{value || "—"}</dd>
     </div>
