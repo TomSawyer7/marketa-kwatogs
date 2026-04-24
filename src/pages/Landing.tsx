@@ -37,7 +37,15 @@ const SECURITY = [
 ];
 
 export default function Landing() {
-  const { user } = useAuth();
+  const { user, loading, isVerified, isAdmin } = useAuth();
+  const navigate = useNavigate();
+
+  // Auto-redirect logged-in users away from the marketing landing page.
+  useEffect(() => {
+    if (loading || !user) return;
+    if (isAdmin || isVerified) navigate("/browse", { replace: true });
+    else navigate("/verify", { replace: true });
+  }, [loading, user, isVerified, isAdmin, navigate]);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
