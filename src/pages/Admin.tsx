@@ -1,47 +1,22 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ShieldCheck, CheckCircle2, XCircle, Loader2, Eye, ArrowLeft, ExternalLink, Copy, QrCode } from "lucide-react";
+import { ShieldCheck, ArrowLeft, RefreshCw, Inbox } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
-
-type EverifyStatus = "not_checked" | "passed" | "failed";
-
-type Item = {
-  user_id: string;
-  status: "pending" | "id_approved" | "verified" | "rejected";
-  ocr_full_name: string | null;
-  ocr_date_of_birth: string | null;
-  ocr_gender: string | null;
-  ocr_psn: string | null;
-  ocr_address: string | null;
-  id_front_path: string;
-  id_back_path: string;
-  face_match_score: number | null;
-  liveness_passed: boolean | null;
-  admin_notes: string | null;
-  submitted_at: string;
-  verified_at: string | null;
-  qr_payload: string | null;
-  everify_status: EverifyStatus;
-  everify_checked_at: string | null;
-  everify_notes: string | null;
-};
-
-const EVERIFY_URL = "https://everify.gov.ph/";
+import { StatsHeader } from "@/components/admin/StatsHeader";
+import { SubmissionList, type FilterKey, type ListItem } from "@/components/admin/SubmissionList";
+import { SubmissionDetail, type DetailItem } from "@/components/admin/SubmissionDetail";
 
 const Admin = () => {
   const navigate = useNavigate();
   const { isAdmin, loading } = useAuth();
-  const [items, setItems] = useState<Item[]>([]);
+  const [items, setItems] = useState<DetailItem[]>([]);
   const [loadingItems, setLoadingItems] = useState(true);
-  const [openUserId, setOpenUserId] = useState<string | null>(null);
-  const [signedUrls, setSignedUrls] = useState<Record<string, { front?: string; back?: string }>>({});
-  const [busy, setBusy] = useState<string | null>(null);
-  const [notes, setNotes] = useState<Record<string, string>>({});
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<FilterKey>("all");
+  const [search, setSearch] = useState("");
 
   useEffect(() => { document.title = "Admin · Marketa"; }, []);
 
@@ -56,250 +31,100 @@ const Admin = () => {
     setLoadingItems(true);
     const { data, error } = await supabase.functions.invoke("admin-verification-action", { body: { action: "list" } });
     if (error) { toast.error(error.message); setLoadingItems(false); return; }
-    setItems((data as { items: Item[] }).items ?? []);
+    const next = ((data as { items: DetailItem[] }).items ?? []);
+    setItems(next);
+    setSelectedId((prev) => prev && next.some((i) => i.user_id === prev) ? prev : (next[0]?.user_id ?? null));
     setLoadingItems(false);
   };
 
-  useEffect(() => { if (isAdmin) load(); }, [isAdmin]);
+  useEffect(() => { if (isAdmin) load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [isAdmin]);
 
-  const openSignedUrls = async (uid: string) => {
-    if (signedUrls[uid]) { setOpenUserId(openUserId === uid ? null : uid); return; }
-    const { data, error } = await supabase.functions.invoke("admin-verification-action", { body: { action: "signed_urls", user_id: uid } });
-    if (error) { toast.error(error.message); return; }
-    const d = data as { front: string; back: string };
-    setSignedUrls((prev) => ({ ...prev, [uid]: { front: d.front, back: d.back } }));
-    setOpenUserId(uid);
-  };
+  const stats = useMemo(() => ({
+    pending: items.filter((i) => i.status === "pending").length,
+    id_approved: items.filter((i) => i.status === "id_approved").length,
+    verified: items.filter((i) => i.status === "verified").length,
+    rejected: items.filter((i) => i.status === "rejected").length,
+  }), [items]);
 
-  const act = async (uid: string, action: "approve_id" | "reject") => {
-    setBusy(uid);
-    const { error } = await supabase.functions.invoke("admin-verification-action", {
-      body: { action, user_id: uid, notes: notes[uid] ?? null },
-    });
-    setBusy(null);
-    if (error) { toast.error(error.message); return; }
-    toast.success(action === "approve_id" ? "ID approved" : "Submission rejected");
-    load();
-  };
+  const filtered: ListItem[] = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return items
+      .filter((i) => filter === "all" || i.status === filter)
+      .filter((i) => {
+        if (!q) return true;
+        return (i.ocr_full_name ?? "").toLowerCase().includes(q) || i.user_id.toLowerCase().includes(q);
+      })
+      .map((i) => ({
+        user_id: i.user_id,
+        status: i.status,
+        everify_status: i.everify_status,
+        ocr_full_name: i.ocr_full_name,
+        submitted_at: i.submitted_at,
+      }));
+  }, [items, filter, search]);
 
-  const markEverify = async (uid: string, result: "passed" | "failed") => {
-    setBusy(uid);
-    const { error } = await supabase.functions.invoke("admin-verification-action", {
-      body: { action: "mark_everify", user_id: uid, everify_result: result, notes: notes[uid] ?? null },
-    });
-    setBusy(null);
-    if (error) { toast.error(error.message); return; }
-    toast.success(result === "passed" ? "eVerify marked as passed" : "eVerify marked as failed");
-    load();
-  };
-
-  const copyPayload = async (payload: string) => {
-    try {
-      await navigator.clipboard.writeText(payload);
-      toast.success("QR payload copied");
-    } catch {
-      toast.error("Could not copy to clipboard");
-    }
-  };
+  const selected = items.find((i) => i.user_id === selectedId) ?? null;
 
   if (loading || !isAdmin) {
     return <div className="min-h-screen grid place-items-center text-sm text-muted-foreground">Loading…</div>;
   }
 
   return (
-    <div className="min-h-screen bg-background px-4 py-8">
-      <div className="max-w-5xl mx-auto">
-        <div className="flex items-center gap-3 mb-6">
-          <Button variant="ghost" size="sm" onClick={() => navigate("/")}><ArrowLeft className="h-4 w-4 mr-1" /> Marketplace</Button>
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="h-5 w-5 text-primary" />
-            <h1 className="text-xl font-bold tracking-tight">Verification queue</h1>
+    <div className="min-h-screen bg-background flex flex-col">
+      {/* Top bar */}
+      <header className="border-b border-border bg-card">
+        <div className="max-w-[1400px] mx-auto px-4 py-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
+              <ArrowLeft className="h-4 w-4" /> Marketplace
+            </Button>
+            <div className="h-5 w-px bg-border" />
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-primary" />
+              <h1 className="text-sm font-semibold tracking-tight">Verification queue</h1>
+            </div>
           </div>
+          <Button variant="ghost" size="sm" onClick={load} disabled={loadingItems}>
+            <RefreshCw className={`h-3.5 w-3.5 ${loadingItems ? "animate-spin" : ""}`} /> Refresh
+          </Button>
         </div>
+      </header>
 
-        {loadingItems ? (
-          <div className="text-sm text-muted-foreground">Loading submissions…</div>
-        ) : items.length === 0 ? (
-          <div className="text-center py-16 text-sm text-muted-foreground">No submissions yet.</div>
-        ) : (
-          <div className="space-y-4">
-            {items.map((it) => (
-              <div key={it.user_id} className="bg-card border border-border rounded-xl p-5">
-                <div className="flex items-start gap-3 flex-wrap">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h2 className="font-semibold truncate">{it.ocr_full_name || "Unknown"}</h2>
-                      <StatusBadge status={it.status} />
-                      <EverifyBadge status={it.everify_status} />
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Submitted {new Date(it.submitted_at).toLocaleString()} · user {it.user_id.slice(0, 8)}…
-                    </p>
-                    <dl className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3 text-sm">
-                      <Info label="DOB" value={it.ocr_date_of_birth} />
-                      <Info label="Gender" value={it.ocr_gender} />
-                      <Info label="PSN" value={it.ocr_psn} />
-                      <Info label="Address" value={it.ocr_address} />
-                    </dl>
-                    {it.face_match_score !== null && (
-                      <p className="text-xs mt-2 text-muted-foreground">
-                        Liveness: {it.liveness_passed ? "passed" : "failed"} · Face match {Math.round(it.face_match_score)}%
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex flex-col gap-2 shrink-0">
-                    <Button variant="outline" size="sm" onClick={() => openSignedUrls(it.user_id)}>
-                      <Eye className="h-4 w-4 mr-1" /> {openUserId === it.user_id ? "Hide" : "View"} ID
-                    </Button>
-                  </div>
+      <div className="flex-1 max-w-[1400px] w-full mx-auto px-4 py-4 flex flex-col min-h-0">
+        <StatsHeader stats={stats} />
+
+        <div className="flex-1 grid grid-cols-1 md:grid-cols-[340px_1fr] gap-4 min-h-0 h-[calc(100vh-220px)]">
+          <SubmissionList
+            items={filtered}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+            filter={filter}
+            onFilterChange={setFilter}
+            search={search}
+            onSearchChange={setSearch}
+          />
+
+          {selected ? (
+            <SubmissionDetail item={selected} onChanged={load} />
+          ) : (
+            <div className="bg-card border border-border rounded-lg grid place-items-center h-full">
+              <div className="text-center px-6 py-12">
+                <div className="h-12 w-12 mx-auto mb-3 rounded-full bg-muted grid place-items-center">
+                  <Inbox className="h-5 w-5 text-muted-foreground" />
                 </div>
-
-                {openUserId === it.user_id && signedUrls[it.user_id] && (
-                  <div className="grid sm:grid-cols-2 gap-3 mt-4">
-                    <a href={signedUrls[it.user_id].front} target="_blank" rel="noreferrer">
-                      <img src={signedUrls[it.user_id].front} alt="ID front" className="w-full aspect-[1.6] object-cover rounded-lg border border-border" />
-                    </a>
-                    <a href={signedUrls[it.user_id].back} target="_blank" rel="noreferrer">
-                      <img src={signedUrls[it.user_id].back} alt="ID back" className="w-full aspect-[1.6] object-cover rounded-lg border border-border" />
-                    </a>
-                  </div>
-                )}
-
-                {/* eVerify.gov.ph panel */}
-                {it.status === "pending" && (
-                  <div className="mt-4 pt-4 border-t border-border">
-                    <div className="flex items-start gap-3 mb-3">
-                      <div className="h-8 w-8 rounded-full bg-primary/10 text-primary grid place-items-center shrink-0">
-                        <QrCode className="h-4 w-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <h3 className="font-semibold text-sm">Step 1 · Verify on eVerify.gov.ph</h3>
-                        <p className="text-xs text-muted-foreground">
-                          Use the QR payload from the back of the ID to verify with PSA, then mark the result below.
-                        </p>
-                      </div>
-                    </div>
-
-                    {it.qr_payload ? (
-                      <div className="bg-secondary/50 rounded-lg p-3 mb-3">
-                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">QR payload</p>
-                        <p className="text-xs font-mono break-all line-clamp-3">{it.qr_payload}</p>
-                      </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground mb-3 italic">No QR payload was decoded from this ID.</p>
-                    )}
-
-                    <div className="flex flex-wrap gap-2 mb-3">
-                      <Button size="sm" variant="outline" asChild>
-                        <a href={EVERIFY_URL} target="_blank" rel="noreferrer">
-                          <ExternalLink className="h-4 w-4 mr-1" /> Open eVerify.gov.ph
-                        </a>
-                      </Button>
-                      {it.qr_payload && (
-                        <Button size="sm" variant="ghost" onClick={() => copyPayload(it.qr_payload!)}>
-                          <Copy className="h-4 w-4 mr-1" /> Copy QR payload
-                        </Button>
-                      )}
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        disabled={busy === it.user_id}
-                        onClick={() => markEverify(it.user_id, "passed")}
-                      >
-                        <CheckCircle2 className="h-4 w-4 mr-1" /> Mark eVerify passed
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        disabled={busy === it.user_id}
-                        onClick={() => markEverify(it.user_id, "failed")}
-                      >
-                        <XCircle className="h-4 w-4 mr-1" /> Mark eVerify failed
-                      </Button>
-                    </div>
-
-                    {it.everify_checked_at && (
-                      <p className="text-[11px] text-muted-foreground mb-3">
-                        Last checked {new Date(it.everify_checked_at).toLocaleString()}
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {it.status === "pending" && (
-                  <div className="mt-4 pt-4 border-t border-border space-y-3">
-                    <div className="flex items-start gap-3 mb-1">
-                      <div className="h-8 w-8 rounded-full bg-primary/10 text-primary grid place-items-center shrink-0">
-                        <ShieldCheck className="h-4 w-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <h3 className="font-semibold text-sm">Step 2 · Decide</h3>
-                        <p className="text-xs text-muted-foreground">
-                          Approval requires eVerify to be marked as passed.
-                        </p>
-                      </div>
-                    </div>
-                    <Textarea
-                      placeholder="Optional notes (shown to user if rejected)…"
-                      value={notes[it.user_id] ?? ""}
-                      onChange={(e) => setNotes((p) => ({ ...p, [it.user_id]: e.target.value }))}
-                      rows={2}
-                    />
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        disabled={busy === it.user_id || it.everify_status !== "passed"}
-                        onClick={() => act(it.user_id, "approve_id")}
-                      >
-                        {busy === it.user_id ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-1" />}
-                        Approve ID
-                      </Button>
-                      <Button size="sm" variant="destructive" disabled={busy === it.user_id} onClick={() => act(it.user_id, "reject")}>
-                        <XCircle className="h-4 w-4 mr-1" /> Reject
-                      </Button>
-                    </div>
-                  </div>
-                )}
-                {it.status === "rejected" && it.admin_notes && (
-                  <p className="mt-3 text-sm text-muted-foreground"><strong>Notes:</strong> {it.admin_notes}</p>
-                )}
+                <p className="text-sm font-medium">
+                  {loadingItems ? "Loading submissions…" : "No submission selected"}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {loadingItems ? "" : "Pick a submission from the list to review it."}
+                </p>
               </div>
-            ))}
-          </div>
-        )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
 };
-
-function Info({ label, value }: { label: string; value: string | null }) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</dt>
-      <dd className="text-sm font-medium truncate">{value || "—"}</dd>
-    </div>
-  );
-}
-
-function StatusBadge({ status }: { status: Item["status"] }) {
-  const map = {
-    pending: { label: "Pending", cls: "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30" },
-    id_approved: { label: "ID approved", cls: "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30" },
-    verified: { label: "Verified", cls: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30" },
-    rejected: { label: "Rejected", cls: "bg-destructive/10 text-destructive border-destructive/30" },
-  } as const;
-  const m = map[status];
-  return <Badge variant="outline" className={m.cls}>{m.label}</Badge>;
-}
-
-function EverifyBadge({ status }: { status: EverifyStatus }) {
-  if (status === "not_checked") {
-    return <Badge variant="outline" className="bg-muted text-muted-foreground border-border">eVerify: not checked</Badge>;
-  }
-  if (status === "passed") {
-    return <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">eVerify ✓</Badge>;
-  }
-  return <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/30">eVerify ✗</Badge>;
-}
 
 export default Admin;
