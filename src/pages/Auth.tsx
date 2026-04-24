@@ -230,7 +230,7 @@ const Auth = () => {
               </form>
             </TabsContent>
           </Tabs>
-          </replace_marker_unused>
+          
         </div>
 
         <div className="text-center mt-4">
