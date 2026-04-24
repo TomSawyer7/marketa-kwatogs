@@ -111,10 +111,55 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (body.action === "mark_everify") {
+      if (!body.user_id || !body.everify_result) {
+        return new Response(JSON.stringify({ error: "user_id and everify_result are required" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (body.everify_result !== "passed" && body.everify_result !== "failed") {
+        return new Response(JSON.stringify({ error: "everify_result must be 'passed' or 'failed'" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { error } = await admin
+        .from("verifications")
+        .update({
+          everify_status: body.everify_result,
+          everify_checked_at: new Date().toISOString(),
+          everify_checked_by: userData.user.id,
+          everify_notes: body.notes ?? null,
+        })
+        .eq("user_id", body.user_id);
+
+      if (error) throw error;
+
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (body.action === "approve_id") {
       if (!body.user_id) {
         return new Response(JSON.stringify({ error: "user_id is required" }), {
           status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Require eVerify pass before allowing approval
+      const { data: gate, error: gateErr } = await admin
+        .from("verifications")
+        .select("everify_status")
+        .eq("user_id", body.user_id)
+        .maybeSingle();
+      if (gateErr) throw gateErr;
+      if (!gate || gate.everify_status !== "passed") {
+        return new Response(JSON.stringify({ error: "Mark eVerify as passed before approving the ID." }), {
+          status: 412,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
