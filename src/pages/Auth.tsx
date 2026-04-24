@@ -35,10 +35,12 @@ const signupSchema = z
     path: ["confirm"],
   });
 
+const PUBLIC_PATHS = new Set(["/", "/auth", "/forgot-password", "/reset-password"]);
+
 const Auth = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, loading, signIn, signUp } = useAuth();
+  const { user, loading, isVerified, isAdmin, signIn, signUp, refreshStatus } = useAuth();
   const [tab, setTab] = useState<"login" | "signup">("login");
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -52,11 +54,23 @@ const Auth = () => {
     confirm: "",
   });
 
-  const from = (location.state as { from?: string } | null)?.from ?? "/";
+  const requestedFrom = (location.state as { from?: string } | null)?.from;
+
+  const destinationFor = (verified: boolean, admin: boolean) => {
+    if (admin || verified) {
+      // Honor the originally requested protected page if any, else go to marketplace.
+      if (requestedFrom && !PUBLIC_PATHS.has(requestedFrom)) return requestedFrom;
+      return "/browse";
+    }
+    return "/verify";
+  };
 
   useEffect(() => {
-    if (!loading && user) navigate(from, { replace: true });
-  }, [user, loading, navigate, from]);
+    if (!loading && user) {
+      navigate(destinationFor(isVerified, isAdmin), { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, loading, isVerified, isAdmin, navigate]);
 
   useEffect(() => {
     document.title = tab === "login" ? "Log in · Marketa" : "Sign up · Marketa";
