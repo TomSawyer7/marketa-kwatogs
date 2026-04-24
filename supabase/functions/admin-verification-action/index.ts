@@ -3,8 +3,9 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 
 type Body = {
   user_id?: string;
-  action?: "approve_id" | "reject" | "list" | "signed_urls";
+  action?: "approve_id" | "reject" | "list" | "signed_urls" | "mark_everify";
   notes?: string;
+  everify_result?: "passed" | "failed";
 };
 
 Deno.serve(async (req) => {
