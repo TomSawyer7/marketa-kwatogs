@@ -12,10 +12,20 @@ export type DetailItem = {
   user_id: string;
   status: VerificationStatus;
   ocr_full_name: string | null;
+  ocr_first_name: string | null;
+  ocr_middle_name: string | null;
+  ocr_last_name: string | null;
   ocr_date_of_birth: string | null;
   ocr_gender: string | null;
+  ocr_sex: string | null;
   ocr_psn: string | null;
+  ocr_document_number: string | null;
   ocr_address: string | null;
+  ocr_nationality: string | null;
+  ocr_place_of_birth: string | null;
+  ocr_blood_type: string | null;
+  ocr_marital_status: string | null;
+  ocr_date_of_issue: string | null;
   face_match_score: number | null;
   liveness_passed: boolean | null;
   admin_notes: string | null;
@@ -105,16 +115,38 @@ export function SubmissionDetail({
       </div>
 
       <div className="flex-1 overflow-y-auto scrollbar-thin p-5 space-y-5">
-        {/* OCR data */}
+        {/* OCR data — full breakdown */}
         <Section icon={User} title="Extracted information">
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-sm">
-            <Info label="Date of birth" value={item.ocr_date_of_birth} />
-            <Info label="Gender" value={item.ocr_gender} />
-            <Info label="PSN" value={item.ocr_psn} />
-            <Info label="Address" value={item.ocr_address} />
-          </dl>
+          <div className="space-y-4">
+            <FieldGroup label="Identity">
+              <Info label="Full name" value={item.ocr_full_name} wide />
+              <Info label="First name" value={item.ocr_first_name} />
+              <Info label="Middle name" value={item.ocr_middle_name} />
+              <Info label="Last name" value={item.ocr_last_name} />
+            </FieldGroup>
+
+            <FieldGroup label="Personal">
+              <Info label="Date of birth" value={item.ocr_date_of_birth} />
+              <Info label="Sex" value={item.ocr_sex ?? item.ocr_gender} />
+              <Info label="Nationality" value={item.ocr_nationality} />
+              <Info label="Place of birth" value={item.ocr_place_of_birth} />
+              <Info label="Blood type" value={item.ocr_blood_type} />
+              <Info label="Marital status" value={item.ocr_marital_status} />
+            </FieldGroup>
+
+            <FieldGroup label="Document">
+              <Info label="Document №" value={item.ocr_document_number} />
+              <Info label="PSN" value={item.ocr_psn} />
+              <Info label="Date of issue" value={item.ocr_date_of_issue} />
+            </FieldGroup>
+
+            <FieldGroup label="Address">
+              <Info label="Address" value={item.ocr_address} wide />
+            </FieldGroup>
+          </div>
+
           {item.face_match_score !== null && (
-            <p className="text-[11px] mt-3 text-muted-foreground">
+            <p className="text-[11px] mt-4 text-muted-foreground">
               Liveness {item.liveness_passed ? "passed" : "failed"} · face match {Math.round(item.face_match_score)}%
             </p>
           )}
@@ -261,9 +293,20 @@ function Section({
   );
 }
 
-function Info({ label, value }: { label: string; value: string | null }) {
+function FieldGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="min-w-0">
+    <div>
+      <p className="text-[10px] uppercase tracking-wider text-muted-foreground/80 font-medium mb-1.5">{label}</p>
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm bg-secondary/30 border border-border/60 rounded-md p-2.5">
+        {children}
+      </dl>
+    </div>
+  );
+}
+
+function Info({ label, value, wide }: { label: string; value: string | null; wide?: boolean }) {
+  return (
+    <div className={`min-w-0 ${wide ? "col-span-2" : ""}`}>
       <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</dt>
       <dd className="text-sm font-medium truncate">{value || "—"}</dd>
     </div>
