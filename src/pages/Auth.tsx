@@ -98,7 +98,8 @@ const Auth = () => {
       return;
     }
     toast.success("Welcome back!");
-    navigate(from, { replace: true });
+    // Redirect handled by the useEffect once verification status loads.
+    await refreshStatus();
   };
 
   const onSignup = async (e: FormEvent) => {
