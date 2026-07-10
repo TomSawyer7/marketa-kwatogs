@@ -4,7 +4,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { useMarketa } from "@/store/marketa";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Bookmark, MapPin, MessageCircle, Share2, ShieldCheck, Pencil, Trash2, ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
+import { Bookmark, MapPin, MessageCircle, Share2, ShieldCheck, Pencil, Trash2, ArrowLeft, ChevronLeft, ChevronRight, PackageCheck } from "lucide-react";
 import { formatPrice, formatRelative } from "@/lib/format";
 import { CATEGORIES } from "@/lib/categories";
 import { toast } from "sonner";
@@ -13,6 +13,8 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { BuyerPickerDialog } from "@/components/reviews/BuyerPickerDialog";
+import { useUserRating } from "@/components/reviews/UserReviewList";
 
 const ItemDetail = () => {
   const { id } = useParams();
