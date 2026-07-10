@@ -35,43 +35,28 @@ const Transactions = () => {
   const load = useCallback(async () => {
     if (!user) return;
     setLoading(true);
-    const { data, error } = await supabase
+    const { data: base, error } = await supabase
       .from("transactions")
-      .select(`
-        id, listing_id, seller_id, buyer_id, status, confirmed_at, created_at,
-        listings:listing_id ( id, title, images, price ),
-        seller:profiles!transactions_seller_id_fkey ( id, name, avatar_url ),
-        buyer:profiles!transactions_buyer_id_fkey ( id, name, avatar_url )
-      `)
+      .select("id, listing_id, seller_id, buyer_id, status, confirmed_at, created_at")
       .or(`seller_id.eq.${user.id},buyer_id.eq.${user.id}`)
       .order("created_at", { ascending: false });
+    if (error) { toast.error(error.message); setLoading(false); return; }
 
-    if (error) {
-      // Foreign-key alias may not exist; fall back to a simpler query
-      const { data: base } = await supabase
-        .from("transactions")
-        .select("id, listing_id, seller_id, buyer_id, status, confirmed_at, created_at")
-        .or(`seller_id.eq.${user.id},buyer_id.eq.${user.id}`)
-        .order("created_at", { ascending: false });
-      const ids = (base ?? []).map((t) => t.listing_id);
-      const uids = Array.from(new Set((base ?? []).flatMap((t) => [t.seller_id, t.buyer_id])));
-      const [{ data: listings }, { data: profiles }] = await Promise.all([
-        supabase.from("listings").select("id, title, images, price").in("id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"]),
-        supabase.from("profiles").select("id, name, avatar_url").in("id", uids.length ? uids : ["00000000-0000-0000-0000-000000000000"]),
-      ]);
-      const lMap = new Map((listings ?? []).map((l) => [l.id, l]));
-      const pMap = new Map((profiles ?? []).map((p) => [p.id, p]));
-      setRows((base ?? []).map((t) => ({
-        ...t,
-        listings: lMap.get(t.listing_id) ?? null,
-        seller: pMap.get(t.seller_id) ?? null,
-        buyer: pMap.get(t.buyer_id) ?? null,
-      })) as Row[]);
-    } else {
-      setRows((data as unknown as Row[]) ?? []);
-    }
+    const ids = (base ?? []).map((t) => t.listing_id);
+    const uids = Array.from(new Set((base ?? []).flatMap((t) => [t.seller_id, t.buyer_id])));
+    const [{ data: listings }, { data: profiles }] = await Promise.all([
+      supabase.from("listings").select("id, title, images, price").in("id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"]),
+      supabase.from("profiles").select("id, name, avatar_url").in("id", uids.length ? uids : ["00000000-0000-0000-0000-000000000000"]),
+    ]);
+    const lMap = new Map((listings ?? []).map((l) => [l.id, l]));
+    const pMap = new Map((profiles ?? []).map((p) => [p.id, p]));
+    setRows((base ?? []).map((t) => ({
+      ...t,
+      listings: lMap.get(t.listing_id) ?? null,
+      seller: pMap.get(t.seller_id) ?? null,
+      buyer: pMap.get(t.buyer_id) ?? null,
+    })) as Row[]);
 
-    // Which transactions have I already reviewed?
     const { data: myReviews } = await supabase
       .from("reviews")
       .select("transaction_id")
