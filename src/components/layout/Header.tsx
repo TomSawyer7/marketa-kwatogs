@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
-import { Search, Plus, Bookmark, User, MessageCircle, Store, LogOut, Settings as SettingsIcon, UserCircle, ShieldCheck } from "lucide-react";
+import { Search, Plus, Bookmark, User, MessageCircle, Store, LogOut, Settings as SettingsIcon, UserCircle, ShieldCheck, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -111,6 +111,11 @@ export function Header() {
                 <DropdownMenuItem asChild>
                   <Link to="/profile" className="cursor-pointer">
                     <UserCircle className="h-4 w-4 mr-2" /> Profile
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/transactions" className="cursor-pointer">
+                    <Receipt className="h-4 w-4 mr-2" /> Transactions
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
