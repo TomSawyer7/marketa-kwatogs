@@ -158,6 +158,9 @@ const ItemDetail = () => {
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
+                  <Button variant="default" className="w-full gap-2 mt-2 basis-full" onClick={() => setBuyerPickerOpen(true)}>
+                    <PackageCheck className="h-4 w-4" /> Mark as sold
+                  </Button>
                 </div>
               ) : null}
 
