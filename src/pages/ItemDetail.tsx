@@ -22,8 +22,10 @@ const ItemDetail = () => {
   const { getListing, getSeller, isSaved, toggleSave, deleteListing, currentUserId } = useMarketa();
   const [imgIndex, setImgIndex] = useState(0);
   const [message, setMessage] = useState("");
+  const [buyerPickerOpen, setBuyerPickerOpen] = useState(false);
 
   const listing = id ? getListing(id) : undefined;
+  const rating = useUserRating(listing?.sellerId);
 
   if (!listing) {
     return (
