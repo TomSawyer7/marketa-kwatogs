@@ -6,12 +6,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ListingCard } from "@/components/marketa/ListingCard";
 import { EmptyState } from "@/components/marketa/EmptyState";
 import { useMarketa } from "@/store/marketa";
-import { Plus, Settings, MapPin, Calendar, ShieldCheck, Bookmark, Store } from "lucide-react";
+import { UserReviewList, useUserRating } from "@/components/reviews/UserReviewList";
+import { Plus, Settings, MapPin, Calendar, ShieldCheck, Bookmark, Store, MessageSquare, Receipt } from "lucide-react";
 
 const Profile = () => {
   const { profile, myListings, listings, saved, getSeller, currentUserId } = useMarketa();
   const me = currentUserId ? getSeller(currentUserId) : getSeller("u_me");
   const savedItems = saved.map((id) => listings.find((l) => l.id === id)).filter(Boolean) as typeof listings;
+  const rating = useUserRating(currentUserId ?? undefined);
 
   return (
     <AppShell>
