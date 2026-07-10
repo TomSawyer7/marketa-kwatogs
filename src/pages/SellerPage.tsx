@@ -3,14 +3,17 @@ import { AppShell } from "@/components/layout/AppShell";
 import { useMarketa } from "@/store/marketa";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ListingCard } from "@/components/marketa/ListingCard";
 import { EmptyState } from "@/components/marketa/EmptyState";
+import { UserReviewList, useUserRating } from "@/components/reviews/UserReviewList";
 import { Calendar, MapPin, ShieldCheck, Store } from "lucide-react";
 
 const SellerPage = () => {
   const { id } = useParams();
   const { getSeller, listings } = useMarketa();
   const seller = id ? getSeller(id) : undefined;
+  const rating = useUserRating(seller?.id);
 
   if (!seller) {
     return (
@@ -40,22 +43,30 @@ const SellerPage = () => {
               <div className="text-sm text-muted-foreground mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
                 <span className="inline-flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />{seller.location}</span>
                 <span className="inline-flex items-center gap-1"><Calendar className="h-3.5 w-3.5" />Joined {new Date(seller.joinedAt).toLocaleDateString(undefined, { month: "long", year: "numeric" })}</span>
-                <span className="inline-flex items-center gap-1 text-success"><ShieldCheck className="h-3.5 w-3.5" />Verified · {seller.rating?.toFixed(1) ?? "5.0"} ★</span>
+                <span className="inline-flex items-center gap-1 text-success"><ShieldCheck className="h-3.5 w-3.5" />Verified · {rating.avg != null ? `${rating.avg.toFixed(1)} ★ (${rating.count})` : "No reviews yet"}</span>
               </div>
             </div>
           </div>
         </div>
 
-        <h3 className="mt-6 text-lg font-semibold">Listings from {seller.name}</h3>
-        <div className="mt-3">
-          {sellerListings.length === 0 ? (
-            <EmptyState icon={Store} title="No active listings" description="This seller has nothing for sale right now." />
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-4">
-              {sellerListings.map((l) => <ListingCard key={l.id} listing={l} />)}
-            </div>
-          )}
-        </div>
+        <Tabs defaultValue="listings" className="mt-6">
+          <TabsList>
+            <TabsTrigger value="listings">Listings ({sellerListings.length})</TabsTrigger>
+            <TabsTrigger value="reviews">Reviews ({rating.count})</TabsTrigger>
+          </TabsList>
+          <TabsContent value="listings" className="mt-3">
+            {sellerListings.length === 0 ? (
+              <EmptyState icon={Store} title="No active listings" description="This seller has nothing for sale right now." />
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-4">
+                {sellerListings.map((l) => <ListingCard key={l.id} listing={l} />)}
+              </div>
+            )}
+          </TabsContent>
+          <TabsContent value="reviews" className="mt-3">
+            <UserReviewList userId={seller.id} />
+          </TabsContent>
+        </Tabs>
       </div>
     </AppShell>
   );

@@ -4,7 +4,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { useMarketa } from "@/store/marketa";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Bookmark, MapPin, MessageCircle, Share2, ShieldCheck, Pencil, Trash2, ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
+import { Bookmark, MapPin, MessageCircle, Share2, ShieldCheck, Pencil, Trash2, ArrowLeft, ChevronLeft, ChevronRight, PackageCheck } from "lucide-react";
 import { formatPrice, formatRelative } from "@/lib/format";
 import { CATEGORIES } from "@/lib/categories";
 import { toast } from "sonner";
@@ -13,6 +13,8 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { BuyerPickerDialog } from "@/components/reviews/BuyerPickerDialog";
+import { useUserRating } from "@/components/reviews/UserReviewList";
 
 const ItemDetail = () => {
   const { id } = useParams();
@@ -20,8 +22,10 @@ const ItemDetail = () => {
   const { getListing, getSeller, isSaved, toggleSave, deleteListing, currentUserId } = useMarketa();
   const [imgIndex, setImgIndex] = useState(0);
   const [message, setMessage] = useState("");
+  const [buyerPickerOpen, setBuyerPickerOpen] = useState(false);
 
   const listing = id ? getListing(id) : undefined;
+  const rating = useUserRating(listing?.sellerId);
 
   if (!listing) {
     return (
@@ -154,6 +158,9 @@ const ItemDetail = () => {
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
+                  <Button variant="default" className="w-full gap-2 mt-2 basis-full" onClick={() => setBuyerPickerOpen(true)}>
+                    <PackageCheck className="h-4 w-4" /> Mark as sold
+                  </Button>
                 </div>
               ) : null}
 
@@ -197,7 +204,12 @@ const ItemDetail = () => {
                 </Link>
                 <div className="mt-3 flex items-center gap-1.5 text-xs text-success">
                   <ShieldCheck className="h-4 w-4" />
-                  <span>Verified seller · {seller.rating?.toFixed(1) ?? "5.0"} ★</span>
+                  <span>
+                    Verified seller ·{" "}
+                    {rating.avg != null
+                      ? `${rating.avg.toFixed(1)} ★ (${rating.count} review${rating.count === 1 ? "" : "s"})`
+                      : "No reviews yet"}
+                  </span>
                 </div>
               </div>
             )}
@@ -221,6 +233,13 @@ const ItemDetail = () => {
           </aside>
         </div>
       </div>
+      {listing && (
+        <BuyerPickerDialog
+          open={buyerPickerOpen}
+          onOpenChange={setBuyerPickerOpen}
+          listingId={listing.id}
+        />
+      )}
     </AppShell>
   );
 };

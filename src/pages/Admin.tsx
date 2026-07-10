@@ -2,12 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ShieldCheck, ArrowLeft, RefreshCw, Inbox } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { StatsHeader } from "@/components/admin/StatsHeader";
 import { SubmissionList, type FilterKey, type ListItem } from "@/components/admin/SubmissionList";
 import { SubmissionDetail, type DetailItem } from "@/components/admin/SubmissionDetail";
+import { TrustPanel } from "@/components/admin/TrustPanel";
 
 const Admin = () => {
   const navigate = useNavigate();
@@ -91,37 +93,49 @@ const Admin = () => {
       </header>
 
       <div className="flex-1 max-w-[1400px] w-full mx-auto px-4 py-4 flex flex-col min-h-0">
-        <StatsHeader stats={stats} />
+        <Tabs defaultValue="verifications" className="flex-1 flex flex-col min-h-0">
+          <TabsList className="w-fit">
+            <TabsTrigger value="verifications">Verifications</TabsTrigger>
+            <TabsTrigger value="trust">Trust & safety</TabsTrigger>
+          </TabsList>
 
-        <div className="flex-1 grid grid-cols-1 md:grid-cols-[340px_1fr] gap-4 min-h-0 h-[calc(100vh-220px)]">
-          <SubmissionList
-            items={filtered}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-            filter={filter}
-            onFilterChange={setFilter}
-            search={search}
-            onSearchChange={setSearch}
-          />
+          <TabsContent value="verifications" className="flex-1 flex flex-col min-h-0 mt-3">
+            <StatsHeader stats={stats} />
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-[340px_1fr] gap-4 min-h-0 h-[calc(100vh-260px)]">
+              <SubmissionList
+                items={filtered}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+                filter={filter}
+                onFilterChange={setFilter}
+                search={search}
+                onSearchChange={setSearch}
+              />
 
-          {selected ? (
-            <SubmissionDetail item={selected} onChanged={load} />
-          ) : (
-            <div className="bg-card border border-border rounded-lg grid place-items-center h-full">
-              <div className="text-center px-6 py-12">
-                <div className="h-12 w-12 mx-auto mb-3 rounded-full bg-muted grid place-items-center">
-                  <Inbox className="h-5 w-5 text-muted-foreground" />
+              {selected ? (
+                <SubmissionDetail item={selected} onChanged={load} />
+              ) : (
+                <div className="bg-card border border-border rounded-lg grid place-items-center h-full">
+                  <div className="text-center px-6 py-12">
+                    <div className="h-12 w-12 mx-auto mb-3 rounded-full bg-muted grid place-items-center">
+                      <Inbox className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <p className="text-sm font-medium">
+                      {loadingItems ? "Loading submissions…" : "No submission selected"}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {loadingItems ? "" : "Pick a submission from the list to review it."}
+                    </p>
+                  </div>
                 </div>
-                <p className="text-sm font-medium">
-                  {loadingItems ? "Loading submissions…" : "No submission selected"}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {loadingItems ? "" : "Pick a submission from the list to review it."}
-                </p>
-              </div>
+              )}
             </div>
-          )}
-        </div>
+          </TabsContent>
+
+          <TabsContent value="trust" className="mt-3">
+            <TrustPanel />
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
