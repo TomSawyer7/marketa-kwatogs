@@ -204,7 +204,12 @@ const ItemDetail = () => {
                 </Link>
                 <div className="mt-3 flex items-center gap-1.5 text-xs text-success">
                   <ShieldCheck className="h-4 w-4" />
-                  <span>Verified seller · {seller.rating?.toFixed(1) ?? "5.0"} ★</span>
+                  <span>
+                    Verified seller ·{" "}
+                    {rating.avg != null
+                      ? `${rating.avg.toFixed(1)} ★ (${rating.count} review${rating.count === 1 ? "" : "s"})`
+                      : "No reviews yet"}
+                  </span>
                 </div>
               </div>
             )}
