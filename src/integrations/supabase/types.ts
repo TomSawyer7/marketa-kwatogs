@@ -14,6 +14,69 @@ export type Database = {
   }
   public: {
     Tables: {
+      account_appeals: {
+        Row: {
+          admin_note: string | null
+          created_at: string
+          id: string
+          message: string
+          resolved_at: string | null
+          resolved_by: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          admin_note?: string | null
+          created_at?: string
+          id?: string
+          message: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          admin_note?: string | null
+          created_at?: string
+          id?: string
+          message?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      account_status: {
+        Row: {
+          created_at: string
+          reason: string | null
+          status: string
+          updated_at: string
+          updated_by: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          reason?: string | null
+          status?: string
+          updated_at?: string
+          updated_by?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          reason?: string | null
+          status?: string
+          updated_at?: string
+          updated_by?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       listings: {
         Row: {
           category: string
@@ -104,6 +167,97 @@ export type Database = {
         }
         Relationships: []
       }
+      review_reports: {
+        Row: {
+          created_at: string
+          id: string
+          reason: string
+          reporter_id: string
+          resolved_at: string | null
+          resolved_by: string | null
+          review_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          reason: string
+          reporter_id: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          review_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          reason?: string
+          reporter_id?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          review_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "review_reports_review_id_fkey"
+            columns: ["review_id"]
+            isOneToOne: false
+            referencedRelation: "reviews"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reviews: {
+        Row: {
+          comment: string | null
+          created_at: string
+          id: string
+          rating: number
+          reviewee_id: string
+          reviewer_id: string
+          role: string
+          tags: string[]
+          transaction_id: string
+          updated_at: string
+        }
+        Insert: {
+          comment?: string | null
+          created_at?: string
+          id?: string
+          rating: number
+          reviewee_id: string
+          reviewer_id: string
+          role: string
+          tags?: string[]
+          transaction_id: string
+          updated_at?: string
+        }
+        Update: {
+          comment?: string | null
+          created_at?: string
+          id?: string
+          rating?: number
+          reviewee_id?: string
+          reviewer_id?: string
+          role?: string
+          tags?: string[]
+          transaction_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reviews_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       saved_listings: {
         Row: {
           created_at: string
@@ -123,6 +277,47 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "saved_listings_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      transactions: {
+        Row: {
+          buyer_id: string
+          confirmed_at: string | null
+          created_at: string
+          id: string
+          listing_id: string
+          seller_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          buyer_id: string
+          confirmed_at?: string | null
+          created_at?: string
+          id?: string
+          listing_id: string
+          seller_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          buyer_id?: string
+          confirmed_at?: string | null
+          created_at?: string
+          id?: string
+          listing_id?: string
+          seller_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transactions_listing_id_fkey"
             columns: ["listing_id"]
             isOneToOne: false
             referencedRelation: "listings"
@@ -312,7 +507,14 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      user_rating_stats: {
+        Row: {
+          avg_rating: number | null
+          review_count: number | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       has_role: {
@@ -322,6 +524,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      recalc_account_status: { Args: { _user_id: string }; Returns: undefined }
     }
     Enums: {
       app_role: "admin" | "user"
