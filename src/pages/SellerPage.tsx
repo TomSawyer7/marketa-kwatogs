@@ -3,8 +3,10 @@ import { AppShell } from "@/components/layout/AppShell";
 import { useMarketa } from "@/store/marketa";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ListingCard } from "@/components/marketa/ListingCard";
 import { EmptyState } from "@/components/marketa/EmptyState";
+import { UserReviewList, useUserRating } from "@/components/reviews/UserReviewList";
 import { Calendar, MapPin, ShieldCheck, Store } from "lucide-react";
 
 const SellerPage = () => {

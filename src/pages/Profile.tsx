@@ -97,6 +97,10 @@ const Profile = () => {
               </div>
             )}
           </TabsContent>
+
+          <TabsContent value="reviews" className="mt-4">
+            {currentUserId && <UserReviewList userId={currentUserId} />}
+          </TabsContent>
         </Tabs>
       </div>
     </AppShell>
