@@ -233,6 +233,13 @@ const ItemDetail = () => {
           </aside>
         </div>
       </div>
+      {listing && (
+        <BuyerPickerDialog
+          open={buyerPickerOpen}
+          onOpenChange={setBuyerPickerOpen}
+          listingId={listing.id}
+        />
+      )}
     </AppShell>
   );
 };
