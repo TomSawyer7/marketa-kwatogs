@@ -249,8 +249,9 @@ const ItemDetail = () => {
                   rows={3}
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
                 />
-                <Button onClick={onSendMessage} className="w-full mt-2 gap-2">
-                  <MessageCircle className="h-4 w-4" />Send message
+                <Button onClick={onSendMessage} disabled={sending} className="w-full mt-2 gap-2">
+                  {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
+                  {sending ? "Sending…" : "Send message"}
                 </Button>
               </div>
             )}
