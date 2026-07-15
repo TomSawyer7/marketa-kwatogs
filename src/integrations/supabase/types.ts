@@ -119,6 +119,47 @@ export type Database = {
         }
         Relationships: []
       }
+      messages: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          kind: string
+          meta: Json
+          read_at: string | null
+          sender_id: string | null
+          thread_id: string
+        }
+        Insert: {
+          body?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          meta?: Json
+          read_at?: string | null
+          sender_id?: string | null
+          thread_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          meta?: Json
+          read_at?: string | null
+          sender_id?: string | null
+          thread_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -284,35 +325,85 @@ export type Database = {
           },
         ]
       }
+      threads: {
+        Row: {
+          created_at: string
+          id: string
+          last_message_at: string
+          listing_id: string | null
+          transaction_id: string | null
+          updated_at: string
+          user_a: string
+          user_b: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_message_at?: string
+          listing_id?: string | null
+          transaction_id?: string | null
+          updated_at?: string
+          user_a: string
+          user_b: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_message_at?: string
+          listing_id?: string | null
+          transaction_id?: string | null
+          updated_at?: string
+          user_a?: string
+          user_b?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "threads_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       transactions: {
         Row: {
+          buyer_confirmed_at: string | null
           buyer_id: string
           confirmed_at: string | null
           created_at: string
           id: string
           listing_id: string
+          seller_confirmed_at: string | null
           seller_id: string
           status: string
+          thread_id: string | null
           updated_at: string
         }
         Insert: {
+          buyer_confirmed_at?: string | null
           buyer_id: string
           confirmed_at?: string | null
           created_at?: string
           id?: string
           listing_id: string
+          seller_confirmed_at?: string | null
           seller_id: string
           status?: string
+          thread_id?: string | null
           updated_at?: string
         }
         Update: {
+          buyer_confirmed_at?: string | null
           buyer_id?: string
           confirmed_at?: string | null
           created_at?: string
           id?: string
           listing_id?: string
+          seller_confirmed_at?: string | null
           seller_id?: string
           status?: string
+          thread_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -321,6 +412,13 @@ export type Database = {
             columns: ["listing_id"]
             isOneToOne: false
             referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "threads"
             referencedColumns: ["id"]
           },
         ]
