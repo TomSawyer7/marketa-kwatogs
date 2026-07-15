@@ -42,20 +42,16 @@ export function TransactionHub({
 
   const myRole: "buyer" | "seller" | null =
     tx && user ? (tx.buyer_id === user.id ? "buyer" : tx.seller_id === user.id ? "seller" : null) : null;
-  const iConfirmed =
-    tx && myRole === "buyer" ? !!tx.buyer_confirmed_at : tx && myRole === "seller" ? !!tx.seller_confirmed_at : false;
-
   const markComplete = async () => {
-    if (!tx || !myRole) return;
+    if (!tx || myRole !== "seller") return;
     setBusy(true);
-    const patch =
-      myRole === "buyer"
-        ? { buyer_confirmed_at: new Date().toISOString() }
-        : { seller_confirmed_at: new Date().toISOString() };
-    const { error } = await supabase.from("transactions").update(patch).eq("id", tx.id);
+    const { error } = await supabase
+      .from("transactions")
+      .update({ status: "completed", confirmed_at: new Date().toISOString() })
+      .eq("id", tx.id);
     setBusy(false);
     if (error) { toast.error(error.message); return; }
-    toast.success("Marked as completed. Waiting for the other party if needed.");
+    toast.success("Transaction marked as completed.");
   };
 
   return (
