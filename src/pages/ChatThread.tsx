@@ -90,7 +90,14 @@ const ChatThread = () => {
             <div className="text-center text-sm text-muted-foreground py-16">Say hi 👋</div>
           )}
           {chat.messages.map((m) => (
-            <MessageBubble key={m.id} m={m} mine={m.sender_id === user?.id} />
+            <MessageBubble
+              key={m.id}
+              m={m}
+              mine={m.sender_id === user?.id}
+              tx={tx}
+              viewerRole={tx && user ? (tx.buyer_id === user.id ? "buyer" : tx.seller_id === user.id ? "seller" : null) : null}
+              onConfirmed={() => setReviewOpen(true)}
+            />
           ))}
           {chat.typing && (
             <div className="flex justify-start">

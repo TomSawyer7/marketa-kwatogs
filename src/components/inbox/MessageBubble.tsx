@@ -1,10 +1,78 @@
+import { useState } from "react";
 import { formatRelative } from "@/lib/format";
-import { Check, CheckCheck } from "lucide-react";
+import { Check, CheckCheck, CheckCircle2, ShieldAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import type { Message } from "@/lib/inbox";
+import type { TxRow } from "@/hooks/use-thread-transaction";
 
-export function MessageBubble({ m, mine }: { m: Message; mine: boolean }) {
+type Props = {
+  m: Message;
+  mine: boolean;
+  tx?: TxRow | null;
+  viewerRole?: "buyer" | "seller" | null;
+  onConfirmed?: () => void;
+};
+
+export function MessageBubble({ m, mine, tx, viewerRole, onConfirmed }: Props) {
+  const [busy, setBusy] = useState<"confirm" | "dispute" | null>(null);
+
   if (m.kind === "system") {
+    const event = (m.meta as { event?: string; transaction_id?: string } | undefined)?.event;
+    const metaTxId = (m.meta as { transaction_id?: string } | undefined)?.transaction_id;
+    const isCurrentTx = tx && metaTxId === tx.id;
+
+    // Buyer confirmation card
+    if (event === "seller_completed" && viewerRole === "buyer" && isCurrentTx && tx?.status === "seller_completed") {
+      const act = async (kind: "confirm" | "dispute") => {
+        if (!tx) return;
+        setBusy(kind);
+        const { error } = await supabase
+          .from("transactions")
+          .update({ status: kind === "confirm" ? "completed" : "discussion" })
+          .eq("id", tx.id);
+        setBusy(null);
+        if (error) { toast.error(error.message); return; }
+        if (kind === "confirm") { toast.success("Transaction confirmed."); onConfirmed?.(); }
+        else toast("Marked as not yet complete.");
+      };
+      return (
+        <div className="my-3 flex justify-center">
+          <div className="w-full max-w-md rounded-2xl border-2 border-primary/40 bg-primary/5 p-4 text-center shadow-sm">
+            <div className="text-sm font-medium text-foreground">
+              The seller has marked this transaction as completed.
+            </div>
+            <div className="mt-1 text-xs text-muted-foreground">
+              Did you receive your item/service?
+            </div>
+            <div className="mt-3 flex justify-center gap-2">
+              <Button size="sm" className="rounded-full gap-1.5" disabled={!!busy} onClick={() => act("confirm")}>
+                <CheckCircle2 className="h-4 w-4" />
+                {busy === "confirm" ? "Confirming…" : "Confirm & Rate"}
+              </Button>
+              <Button size="sm" variant="outline" className="rounded-full gap-1.5" disabled={!!busy} onClick={() => act("dispute")}>
+                <ShieldAlert className="h-4 w-4" />
+                {busy === "dispute" ? "…" : "Dispute / Not Yet"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Seller sees a slightly richer pill for their own mark-as-done event
+    if (event === "seller_completed" && viewerRole === "seller") {
+      return (
+        <div className="my-3 flex justify-center">
+          <div className="text-xs px-3 py-1.5 rounded-full bg-muted text-muted-foreground text-center max-w-md">
+            You marked this transaction as done. Waiting for the buyer to confirm.
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="my-3 flex justify-center">
         <div className="text-xs px-3 py-1.5 rounded-full bg-muted text-muted-foreground text-center max-w-md">
