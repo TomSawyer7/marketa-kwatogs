@@ -1,58 +1,33 @@
 ## Goal
-Redesign the seller profile header (SellerPage) to match the uploaded card reference, and refine the ratings section below it. Transaction-locked review logic already exists — keep and reuse it.
+Apply the same redesigned header + layout from `SellerPage.tsx` to the current user's own `Profile.tsx`, adapted for self-view.
 
-## 1. New Profile Header (`src/pages/SellerPage.tsx`)
+## Changes to `src/pages/Profile.tsx`
 
-Replace the current banner+avatar header with a single rounded card, soft gradient background (light blue → white), containing:
+Replace the existing cover-banner + stats-grid + tabs layout with the SellerPage structure:
 
-```text
-┌─────────────────────────────────────────────┐
-│  [Avatar]                          [Share] │
-│                                             │
-│  Name (bold, 2xl)                           │
-│  Location (muted, sm)                       │
-│  Role / "Verified Seller" (muted, xs)       │
-│                                             │
-│  [ Figma ] [ UX Design ]  ← skill pills     │
-│                                             │
-│  ★ 4.8      34         128                  │
-│  Rating   Listings   Successful Txns        │
-│                                             │
-│  [ Get in touch ─────────────── ] [ 🔖 ]    │
-└─────────────────────────────────────────────┘
-```
+1. **Header card** (rounded-3xl, gradient `from-primary-soft/60 via-card to-card`):
+   - Avatar top-left (from `profile.avatar`)
+   - Share icon top-right (uses `navigator.share`/clipboard fallback, same as SellerPage)
+   - Name (`profile.name`), location with `MapPin`, bio/subtitle
+   - Skill pills derived from `myListings` categories (fallback "Verified Seller")
+   - 3-metric row: Rating (from `useUserRating`), Listings (`myListings.length`), Successful Transactions (new `useSellerTxStats(currentUserId)`)
+   - Actions row — self-view variants:
+     - Primary wide rounded button: **"Edit profile"** → `/settings` (replaces "Get in touch" since it's your own profile)
+     - Circular icon button: **Plus** → `/sell` (replaces bookmark, since bookmarking yourself is meaningless)
 
-Details:
-- Avatar top-left (h-16 w-16, ring-2 ring-background).
-- Share icon (lucide `Share`) top-right, ghost icon button.
-- Name (text-2xl font-bold), location under name with `MapPin` icon, role sub-text under location.
-- Skill/tag pills from seller categories (fallback to `Verified`, `Trusted Seller` if none). Rounded-full, muted bg.
-- 3-column metric row (grid-cols-3, dividers optional):
-  - Rating: `★ {avg}` from `useUserRating` (fallback `—`), sub-label "Rating"
-  - Listings: `sellerListings.length`, sub-label "Listings"
-  - Successful Transactions: count from `transactions` where seller_id=seller.id AND status='completed' (new small hook `useSellerTxStats`)
-- Primary actions row: wide rounded `Get in touch` button (links to messages/contact — reuse existing route if any, else placeholder handler) + circular bookmark IconButton (toggle local state).
+2. **RatingsSummary** always visible below the header (same as SellerPage).
 
-## 2. Ratings Section Below Header
+3. **Tabs** — keep the three existing self-profile tabs:
+   - Your listings
+   - Saved
+   - Reviews (renders `UserReviewList`)
+   Move them below `RatingsSummary` with `defaultValue="listings"`.
 
-Keep existing `RatingsSummary` + `UserReviewList` inside the Reviews tab. Two small tweaks:
-- Move `RatingsSummary` out of the tab so aggregate is always visible directly under the header card; keep review list inside Tabs (Listings / Reviews) as today.
-- No behavior change to `useReviewEligibility` — Tap-to-Rate and Write a Review stay locked/hidden unless the viewer has a `completed` transaction with the profile owner. Already implemented.
-
-## 3. New Small Hook
-
-`useSellerTxStats(sellerId)` in `src/hooks/use-seller-tx-stats.ts`:
-- Queries `transactions` filtered by `seller_id = sellerId, status = 'completed'`, returns `{ successfulCount }`.
-
-## 4. Design Tokens
-
-Use existing tokens (`bg-card`, `border-border`, `text-muted-foreground`, `text-primary`). Header card background: `bg-gradient-to-br from-primary-soft/40 to-card`. No hardcoded colors.
+4. Constrain container to `max-w-3xl mx-auto space-y-5` to match SellerPage.
 
 ## Files
-- edit `src/pages/SellerPage.tsx` — new header layout, metrics row, actions
-- add `src/hooks/use-seller-tx-stats.ts`
-- (no changes to review components, eligibility hook, or DB)
+- edit `src/pages/Profile.tsx`
+- reuse existing `useSellerTxStats`, `useUserRating`, `RatingsSummary`, `UserReviewList` — no new files.
 
 ## Out of Scope
-- No schema changes, no new tables.
-- No changes to `Profile.tsx` (own profile) unless you want it mirrored — ask if needed.
+- No changes to reviews logic, DB, or SellerPage.
