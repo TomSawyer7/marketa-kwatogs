@@ -77,11 +77,14 @@ export function TransactionHub({
             <MessageSquareText className="h-4 w-4" /> Create Proposal
           </Button>
         )}
-        {tx && tx.status !== "completed" && myRole && (
-          <Button size="sm" className="rounded-full gap-1.5" disabled={busy || iConfirmed} onClick={markComplete}>
+        {tx && tx.status !== "completed" && myRole === "seller" && (
+          <Button size="sm" className="rounded-full gap-1.5" disabled={busy} onClick={markComplete}>
             <Handshake className="h-4 w-4" />
-            {iConfirmed ? "You confirmed · waiting" : "Mark as Completed"}
+            {busy ? "Marking…" : "Mark Transaction as Done"}
           </Button>
+        )}
+        {tx && tx.status !== "completed" && myRole === "buyer" && (
+          <span className="text-xs text-muted-foreground self-center">Waiting for seller to mark as done…</span>
         )}
         {tx?.status === "completed" && canRate && (
           <Button size="sm" variant="default" className="rounded-full gap-1.5" onClick={onRate}>
