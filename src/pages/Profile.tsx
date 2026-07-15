@@ -99,11 +99,7 @@ const Profile = () => {
         {currentUserId && <RatingsSummary userId={currentUserId} userName={profile.name} />}
 
         {/* Reviews list */}
-        {currentUserId && (
-          <div className="-mt-2">
-            <UserReviewList userId={currentUserId} />
-          </div>
-        )}
+        {currentUserId && <UserReviewList userId={currentUserId} />}
 
         {/* Tabs */}
         <Tabs defaultValue="listings">
