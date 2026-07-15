@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { AppShell } from "@/components/layout/AppShell";
 import { useMarketa } from "@/store/marketa";
@@ -8,13 +9,17 @@ import { ListingCard } from "@/components/marketa/ListingCard";
 import { EmptyState } from "@/components/marketa/EmptyState";
 import { UserReviewList, useUserRating } from "@/components/reviews/UserReviewList";
 import { RatingsSummary } from "@/components/reviews/RatingsSummary";
-import { Calendar, MapPin, ShieldCheck, Store } from "lucide-react";
+import { useSellerTxStats } from "@/hooks/use-seller-tx-stats";
+import { Bookmark, MapPin, MessageCircle, Share2, Star, Store } from "lucide-react";
+import { toast } from "sonner";
 
 const SellerPage = () => {
   const { id } = useParams();
-  const { getSeller, listings } = useMarketa();
+  const { getSeller, listings, isSaved, toggleSave } = useMarketa();
   const seller = id ? getSeller(id) : undefined;
   const rating = useUserRating(seller?.id);
+  const { successfulCount } = useSellerTxStats(seller?.id);
+  const [bookmarked, setBookmarked] = useState(false);
 
   if (!seller) {
     return (
@@ -28,50 +33,118 @@ const SellerPage = () => {
   }
 
   const sellerListings = listings.filter((l) => l.sellerId === seller.id);
+  const skillTags = Array.from(new Set(sellerListings.map((l) => l.category))).slice(0, 4);
+  if (skillTags.length === 0) skillTags.push("Verified Seller");
+
+  const share = async () => {
+    const url = window.location.href;
+    try {
+      if (navigator.share) await navigator.share({ title: seller.name, url });
+      else { await navigator.clipboard.writeText(url); toast.success("Profile link copied"); }
+    } catch { /* cancelled */ }
+  };
 
   return (
     <AppShell>
-      <div className="px-4 md:px-6 lg:px-8 py-5 md:py-6">
-        <div className="bg-card border border-border rounded-lg overflow-hidden">
-          <div className="h-28 md:h-36 bg-gradient-to-br from-primary to-primary-hover" />
-          <div className="px-5 md:px-6 pb-5 -mt-10 md:-mt-12 flex flex-col md:flex-row md:items-end gap-4">
-            <Avatar className="h-20 w-20 md:h-24 md:w-24 ring-4 ring-card">
-              <AvatarImage src={seller.avatar} alt={seller.name} />
-              <AvatarFallback>{seller.name.slice(0, 1)}</AvatarFallback>
-            </Avatar>
-            <div className="flex-1 min-w-0 md:pb-1">
-              <h2 className="text-2xl font-bold tracking-tight">{seller.name}</h2>
-              <div className="text-sm text-muted-foreground mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
-                <span className="inline-flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />{seller.location}</span>
-                <span className="inline-flex items-center gap-1"><Calendar className="h-3.5 w-3.5" />Joined {new Date(seller.joinedAt).toLocaleDateString(undefined, { month: "long", year: "numeric" })}</span>
-                <span className="inline-flex items-center gap-1 text-success"><ShieldCheck className="h-3.5 w-3.5" />Verified · {rating.avg != null ? `${rating.avg.toFixed(1)} ★ (${rating.count})` : "No reviews yet"}</span>
-              </div>
-            </div>
-          </div>
-        </div>
+      <div className="px-4 md:px-6 lg:px-8 py-5 md:py-6 max-w-3xl mx-auto space-y-5">
+        {/* Profile header card */}
+        <section className="relative rounded-3xl border border-border overflow-hidden bg-gradient-to-br from-primary-soft/60 via-card to-card p-6 md:p-7">
+          <button
+            onClick={share}
+            aria-label="Share profile"
+            className="absolute top-4 right-4 h-9 w-9 grid place-items-center rounded-full bg-card/80 backdrop-blur border border-border hover:bg-card transition"
+          >
+            <Share2 className="h-4 w-4" />
+          </button>
 
-        <Tabs defaultValue="listings" className="mt-6">
+          <Avatar className="h-16 w-16 md:h-20 md:w-20 ring-2 ring-background shadow-sm">
+            <AvatarImage src={seller.avatar} alt={seller.name} />
+            <AvatarFallback>{seller.name.slice(0, 1)}</AvatarFallback>
+          </Avatar>
+
+          <div className="mt-5">
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight leading-tight">{seller.name}</h1>
+            <div className="mt-1 flex items-center gap-1 text-sm text-muted-foreground">
+              <MapPin className="h-3.5 w-3.5" />
+              <span>{seller.location}</span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">{seller.bio ?? "Verified Seller"}</p>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            {skillTags.map((t) => (
+              <span key={t} className="text-xs px-3 py-1 rounded-full bg-background/70 border border-border text-foreground/80">
+                {t}
+              </span>
+            ))}
+          </div>
+
+          <div className="mt-6 grid grid-cols-3 gap-2">
+            <Metric
+              value={
+                <span className="inline-flex items-center gap-1">
+                  <Star className="h-4 w-4 fill-primary text-primary" />
+                  {rating.avg != null ? rating.avg.toFixed(1) : "—"}
+                </span>
+              }
+              label="Rating"
+            />
+            <Metric value={sellerListings.length} label="Listings" />
+            <Metric value={successfulCount} label="Successful Transactions" />
+          </div>
+
+          <div className="mt-6 flex items-center gap-3">
+            <Button
+              className="flex-1 rounded-full h-12 text-base font-medium"
+              onClick={() => toast.info("Messaging coming soon")}
+            >
+              <MessageCircle className="h-4 w-4 mr-2" />
+              Get in touch
+            </Button>
+            <button
+              onClick={() => { setBookmarked((v) => !v); }}
+              aria-label="Bookmark seller"
+              className="h-12 w-12 grid place-items-center rounded-full bg-card border border-border hover:bg-muted transition"
+            >
+              <Bookmark className={`h-5 w-5 ${bookmarked ? "fill-foreground text-foreground" : "text-foreground"}`} />
+            </button>
+          </div>
+        </section>
+
+        {/* Ratings aggregate (always visible) */}
+        <RatingsSummary userId={seller.id} userName={seller.name} />
+
+        {/* Tabs: listings / reviews */}
+        <Tabs defaultValue="reviews">
           <TabsList>
-            <TabsTrigger value="listings">Listings ({sellerListings.length})</TabsTrigger>
             <TabsTrigger value="reviews">Reviews ({rating.count})</TabsTrigger>
+            <TabsTrigger value="listings">Listings ({sellerListings.length})</TabsTrigger>
           </TabsList>
+          <TabsContent value="reviews" className="mt-3">
+            <UserReviewList userId={seller.id} />
+          </TabsContent>
           <TabsContent value="listings" className="mt-3">
             {sellerListings.length === 0 ? (
               <EmptyState icon={Store} title="No active listings" description="This seller has nothing for sale right now." />
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 md:gap-4">
                 {sellerListings.map((l) => <ListingCard key={l.id} listing={l} />)}
               </div>
             )}
-          </TabsContent>
-          <TabsContent value="reviews" className="mt-3 space-y-4">
-            <RatingsSummary userId={seller.id} userName={seller.name} />
-            <UserReviewList userId={seller.id} />
           </TabsContent>
         </Tabs>
       </div>
     </AppShell>
   );
 };
+
+function Metric({ value, label }: { value: React.ReactNode; label: string }) {
+  return (
+    <div className="text-center">
+      <div className="text-lg md:text-xl font-bold leading-none">{value}</div>
+      <div className="text-[11px] text-muted-foreground mt-1.5 leading-tight">{label}</div>
+    </div>
+  );
+}
 
 export default SellerPage;
