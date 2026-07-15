@@ -4,7 +4,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { useMarketa } from "@/store/marketa";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Bookmark, MapPin, MessageCircle, Share2, ShieldCheck, Pencil, Trash2, ArrowLeft, ChevronLeft, ChevronRight, PackageCheck } from "lucide-react";
+import { Bookmark, MapPin, MessageCircle, Share2, ShieldCheck, Pencil, Trash2, ArrowLeft, ChevronLeft, ChevronRight, PackageCheck, Loader2 } from "lucide-react";
 import { formatPrice, formatRelative } from "@/lib/format";
 import { CATEGORIES } from "@/lib/categories";
 import { toast } from "sonner";
@@ -15,13 +15,18 @@ import {
 import { cn } from "@/lib/utils";
 import { BuyerPickerDialog } from "@/components/reviews/BuyerPickerDialog";
 import { useUserRating } from "@/components/reviews/UserReviewList";
+import { useAuth } from "@/hooks/use-auth";
+import { getOrCreateThread } from "@/lib/inbox";
+import { supabase } from "@/integrations/supabase/client";
 
 const ItemDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { getListing, getSeller, isSaved, toggleSave, deleteListing, currentUserId } = useMarketa();
+  const { user } = useAuth();
   const [imgIndex, setImgIndex] = useState(0);
   const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
   const [buyerPickerOpen, setBuyerPickerOpen] = useState(false);
 
   const listing = id ? getListing(id) : undefined;
