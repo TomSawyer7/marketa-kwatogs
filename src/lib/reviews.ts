@@ -19,3 +19,4 @@ export type ReviewTag = (typeof ALL_TAGS)[number];
 
 export const MAX_TAGS = 3;
 export const MAX_COMMENT = 500;
+export const REVIEW_WINDOW_DAYS = 14;
