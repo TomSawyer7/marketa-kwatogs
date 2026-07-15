@@ -1,56 +1,77 @@
+## Verified Two-Way Ratings & Reviews — App Store style
 
-# Rating & Feedback System
+Redesign the reviews surface on `SellerPage` to match the App Store layout, and tighten the write-review guardrails so ratings are only ever generated from a completed transaction, once per party, within a fixed window.
 
-A peer-to-peer review system tied strictly to completed transactions, with reporting, automatic account flagging, and an in-app appeal flow.
+### 1. UI changes (frontend only)
 
-## User-facing flow
+**New component `src/components/reviews/RatingsSummary.tsx`**
+- Large aggregate score ("4.8") + "out of 5"
+- Total count ("894 Ratings")
+- 5→1 star horizontal distribution bars (computed client-side from fetched reviews)
+- "Tap to Rate" star row + "Write a Review" button
+  - Locked by default; enabled only when the viewer has an eligible transaction token (see logic below)
+  - Locked state shows message: *"You can only rate users you have successfully transacted with."*
 
-1. **Mark as sold.** On a listing they own, the seller opens "Mark as sold" and picks the buyer (search users by name/email). This creates a `transaction` in `pending_confirmation`.
-2. **Buyer confirms.** Buyer sees "Confirm purchase" in a new **Transactions** tab on their profile. On confirm → status becomes `completed` and both sides unlock a "Leave review" button.
-3. **Review.** 1–5 stars, up to 3 quick tags (As described, On time, Communicative, Fair price, Friendly / plus negative counterparts), optional comment (max 500 chars). Each side can review once per transaction.
-4. **Public reviews.** Seller and buyer profiles show average rating, review count, and a reviews tab. Existing hard-coded `5.0` on profile/seller pages is replaced with real aggregates.
-5. **Report a review.** Any user can report a review as fraudulent/abusive with a reason.
-6. **Auto-flag.** When a user hits **3+ upheld reports OR average rating < 2.0 with ≥ 5 reviews**, their account status flips to `restricted` (cannot create listings, cannot leave reviews; browsing still works).
-7. **Appeal.** Restricted users see an appeal banner + form. Admins review appeals in `/admin` and can uphold restriction, lift it, or escalate to `suspended`.
+**Update `src/components/reviews/UserReviewList.tsx`**
+- Card layout inspired by App Store: bold title (auto-derived from first tag, e.g. "Helpful"), star row, `1y ago · Reviewer Name`, body text with **Read more / Read less** toggle (truncate ~180 chars)
+- Sort dropdown: **Most Recent**, **Most Helpful** (highest rating, then longest comment), **Highest**, **Lowest**
+- Keep existing report action
 
-## Data model (new tables in `public`)
+**Wire into `SellerPage.tsx`**
+- Replace current "Reviews" tab content with `RatingsSummary` on top + filtered `UserReviewList` below
+- Move avg-rating chip in header to reuse the same hook
 
-- `transactions` — `listing_id`, `seller_id`, `buyer_id`, `status` (`pending_confirmation` | `completed` | `cancelled`), `confirmed_at`.
-- `reviews` — `transaction_id`, `reviewer_id`, `reviewee_id`, `role` (`buyer` | `seller`), `rating` (1–5), `tags` (text[]), `comment`, unique on `(transaction_id, reviewer_id)`.
-- `review_reports` — `review_id`, `reporter_id`, `reason`, `status` (`pending` | `upheld` | `dismissed`), `resolved_by`, `resolved_at`.
-- `account_status` — `user_id` PK, `status` (`active` | `restricted` | `suspended`), `reason`, `updated_by`, `updated_at`.
-- `account_appeals` — `user_id`, `message`, `status` (`pending` | `approved` | `denied`), `admin_note`, `resolved_by`, `resolved_at`.
-- View/function `user_rating_stats(user_id)` → `avg_rating`, `review_count`, `upheld_report_count` for cheap reads.
+**Design language**
+- Dark-card look matching reference: `bg-card` rounded-2xl, muted bar tracks (`bg-muted`) with `bg-foreground` fills, `text-primary` accents on active stars and "Tap to Rate" and sort control (kept theme-token based, no hardcoded colors)
 
-RLS summary (plain English):
-- Anyone signed in can read reviews and rating stats; anonymous browsing also allowed for reviews so seller pages render.
-- Only the seller can create a transaction for their own listing; only the named buyer can confirm it.
-- A user can insert a review only if they are a participant of a `completed` transaction and haven't already reviewed it.
-- A user can report any review once. Only admins can update report status, `account_status`, or resolve appeals.
-- A user can insert/read their own appeals; admins can read/update all.
+### 2. Guardrail logic (uses existing schema — no migration)
 
-## Auto-flag logic
+The `transactions` and `reviews` tables already model this. We formalize the rules on the client:
 
-A `SECURITY DEFINER` function `public.recalc_account_status(user_id)` runs after: review insert, report status change. It computes stats and, if thresholds are hit, upserts `account_status` to `restricted` with reason `auto:low_rating` or `auto:reports`. Admin manual actions always win over auto values.
+```
+canReview(viewer, profileOwner) =
+  exists tx in transactions where
+    tx.status == 'completed'
+    AND ((tx.buyer_id == viewer AND tx.seller_id == profileOwner)
+      OR (tx.seller_id == viewer AND tx.buyer_id == profileOwner))
+    AND tx.confirmed_at >= now() - REVIEW_WINDOW_DAYS
+    AND NOT exists review where
+        review.transaction_id == tx.id AND review.reviewer_id == viewer
+```
 
-## UI changes
+- `REVIEW_WINDOW_DAYS = 14` (constant in `src/lib/reviews.ts`)
+- Query runs on profile load; returns the eligible `transaction_id` + role (buyer/seller)
+- If eligible → unlock "Tap to Rate" / "Write a Review", pass token into existing `ReviewForm`
+- If not eligible → disabled state with tooltip explaining the reason (no tx, expired, already reviewed)
+- Existing DB constraints (`reviews` unique on `transaction_id, reviewer_id`, and RLS requiring completed tx) remain the source of truth server-side; UI just mirrors them
 
-- **New page `/transactions`** — buyer & seller lists with confirm / leave review actions.
-- **Listing detail** — seller sees "Mark as sold → pick buyer" action.
-- **Profile / SellerPage** — real avg rating + review count, new "Reviews" tab, "Report" button on each review.
-- **Restricted banner** — global banner via `VerificationGate` sibling when `account_status = restricted/suspended`, with link to appeal form. Sell/review actions disabled.
-- **Admin (`/admin`)** — new tabs: **Reports** (uphold/dismiss), **Appeals** (approve/deny), **Restricted users** (manual lift/suspend).
+### 3. Deliverables per user request
 
-## Technical notes
+**Component schema** (documented in a short block inside `RatingsSummary.tsx`):
+```
+RatingsSummary
+├── AggregateHeader  { avg, count }
+├── DistributionBars { counts[1..5] }
+├── TapToRate        { locked, onRate }
+└── WriteReviewCTA   { locked, lockReason, onOpenForm }
 
-- Migration creates all tables with grants (`authenticated` CRUD where policies allow, `service_role` all, `anon` read on `reviews` + `user_rating_stats`), enables RLS, adds `updated_at` triggers, and creates the recalc function + triggers.
-- Client uses existing `supabase-js`; no edge functions needed. Admin mutations gated by `has_role(auth.uid(), 'admin')` in RLS.
-- Extend `useMarketa` (or a new `useTransactions` hook) for transactions/reviews; keep listing store untouched.
-- Zod validation on all forms (rating range, comment length, tag whitelist, appeal message length).
-- Replace hard-coded rating strings in `Profile.tsx` and `SellerPage.tsx` with values from `user_rating_stats`.
+ReviewCard
+├── Title       (derived from top tag)
+├── Stars       (1–5)
+├── Meta        { relativeTime, reviewerName }
+└── Body        { text, truncated, onToggle }
 
-## Out of scope
+ReviewList
+└── SortControl { Most Recent | Most Helpful | Highest | Lowest }
+```
 
-- Messaging / chat between buyer & seller.
-- Email notifications for reviews/appeals.
-- Editing or deleting a submitted review (only reporting).
+**DB logic** — no schema change; reuse existing tables. Eligibility pseudocode above will live in a new hook `useReviewEligibility(profileOwnerId)` in `src/hooks/use-review-eligibility.ts`.
+
+### Files touched
+- new: `src/components/reviews/RatingsSummary.tsx`
+- new: `src/hooks/use-review-eligibility.ts`
+- edit: `src/components/reviews/UserReviewList.tsx` (App Store card + sort + read more)
+- edit: `src/pages/SellerPage.tsx` (compose summary + list)
+- edit: `src/lib/reviews.ts` (add `REVIEW_WINDOW_DAYS`)
+
+Scope stays frontend + one read-only hook; no migrations, no backend changes.
