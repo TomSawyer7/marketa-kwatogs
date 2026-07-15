@@ -64,7 +64,8 @@ const SellerPage = () => {
               </div>
             )}
           </TabsContent>
-          <TabsContent value="reviews" className="mt-3">
+          <TabsContent value="reviews" className="mt-3 space-y-4">
+            <RatingsSummary userId={seller.id} userName={seller.name} />
             <UserReviewList userId={seller.id} />
           </TabsContent>
         </Tabs>
