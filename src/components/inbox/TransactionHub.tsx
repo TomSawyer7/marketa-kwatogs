@@ -11,14 +11,14 @@ import { useAuth } from "@/hooks/use-auth";
 
 const STAGES: { key: string; label: string }[] = [
   { key: "discussion", label: "In Discussion" },
-  { key: "agreed", label: "Agreement Made" },
+  { key: "seller_completed", label: "Seller Marked Done" },
   { key: "completed", label: "Completed" },
 ];
 
 function stageIndex(tx: TxRow | null): number {
   if (!tx) return 0;
   if (tx.status === "completed") return 2;
-  if (tx.status === "agreed" || tx.buyer_confirmed_at || tx.seller_confirmed_at) return 1;
+  if (tx.status === "seller_completed") return 1;
   return 0;
 }
 
@@ -42,16 +42,17 @@ export function TransactionHub({
 
   const myRole: "buyer" | "seller" | null =
     tx && user ? (tx.buyer_id === user.id ? "buyer" : tx.seller_id === user.id ? "seller" : null) : null;
-  const markComplete = async () => {
+
+  const markAsDone = async () => {
     if (!tx || myRole !== "seller") return;
     setBusy(true);
     const { error } = await supabase
       .from("transactions")
-      .update({ status: "completed", confirmed_at: new Date().toISOString() })
+      .update({ status: "seller_completed" })
       .eq("id", tx.id);
     setBusy(false);
     if (error) { toast.error(error.message); return; }
-    toast.success("Transaction marked as completed.");
+    toast.success("Marked as done. Waiting for buyer confirmation.");
   };
 
   return (
@@ -77,18 +78,21 @@ export function TransactionHub({
             <MessageSquareText className="h-4 w-4" /> Create Proposal
           </Button>
         )}
-        {tx && tx.status !== "completed" && myRole === "seller" && (
-          <Button size="sm" className="rounded-full gap-1.5" disabled={busy} onClick={markComplete}>
+        {tx && myRole === "seller" && tx.status !== "completed" && tx.status !== "seller_completed" && (
+          <Button size="sm" className="rounded-full gap-1.5" disabled={busy} onClick={markAsDone}>
             <Handshake className="h-4 w-4" />
-            {busy ? "Marking…" : "Mark Transaction as Done"}
+            {busy ? "Marking…" : "Mark as Done"}
           </Button>
         )}
-        {tx && tx.status !== "completed" && myRole === "buyer" && (
+        {tx && myRole === "seller" && tx.status === "seller_completed" && (
+          <span className="text-xs text-muted-foreground self-center">Waiting for buyer confirmation…</span>
+        )}
+        {tx && myRole === "buyer" && tx.status !== "completed" && tx.status !== "seller_completed" && (
           <span className="text-xs text-muted-foreground self-center">Waiting for seller to mark as done…</span>
         )}
         {tx?.status === "completed" && canRate && (
           <Button size="sm" variant="default" className="rounded-full gap-1.5" onClick={onRate}>
-            <Star className="h-4 w-4" /> Rate them
+            <Star className="h-4 w-4" /> Write a Review
           </Button>
         )}
       </div>
