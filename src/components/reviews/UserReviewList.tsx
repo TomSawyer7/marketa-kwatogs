@@ -1,9 +1,8 @@
-import { useEffect, useState } from "react";
-import { Flag, Star } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Flag, MessageSquare } from "lucide-react";
 import { formatRelative } from "@/lib/format";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RatingStars } from "./RatingStars";
 import { toast } from "sonner";
@@ -12,7 +11,10 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/marketa/EmptyState";
-import { MessageSquare } from "lucide-react";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { POSITIVE_TAGS } from "@/lib/reviews";
 
 type Row = {
   id: string;
@@ -21,8 +23,67 @@ type Row = {
   comment: string | null;
   role: "buyer" | "seller";
   reviewer_id: string;
+  reviewer_name: string | null;
   created_at: string;
 };
+
+type Sort = "recent" | "helpful" | "highest" | "lowest";
+const TRUNCATE = 180;
+
+function ReviewCard({ r, onReport, canReport }: { r: Row; onReport: () => void; canReport: boolean }) {
+  const [expanded, setExpanded] = useState(false);
+  const comment = r.comment ?? "";
+  const long = comment.length > TRUNCATE;
+  const shown = expanded || !long ? comment : comment.slice(0, TRUNCATE).trimEnd() + "…";
+  const title = r.tags?.[0] ?? (r.rating >= 4 ? "Great experience" : r.rating >= 3 ? "Okay" : "Needs improvement");
+  const positive = r.tags?.some((t) => (POSITIVE_TAGS as readonly string[]).includes(t)) ?? r.rating >= 4;
+
+  return (
+    <li className="bg-card border border-border rounded-2xl p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <h4 className="font-semibold text-base leading-tight">{title}</h4>
+          <div className="mt-1.5 flex items-center gap-2">
+            <RatingStars value={r.rating} size={14} />
+            <span className="text-xs text-muted-foreground">
+              {formatRelative(new Date(r.created_at).getTime())} · {r.reviewer_name ?? "Anonymous"}
+            </span>
+          </div>
+        </div>
+        {canReport && (
+          <Button size="sm" variant="ghost" className="gap-1 text-muted-foreground -mr-2" onClick={onReport}>
+            <Flag className="h-3.5 w-3.5" />
+          </Button>
+        )}
+      </div>
+      {comment && (
+        <div className="mt-3">
+          <p className="text-sm whitespace-pre-line text-foreground/90">{shown}</p>
+          {long && (
+            <button
+              onClick={() => setExpanded((v) => !v)}
+              className="mt-1 text-xs font-medium text-primary hover:underline"
+            >
+              {expanded ? "Read less" : "Read more"}
+            </button>
+          )}
+        </div>
+      )}
+      {r.tags && r.tags.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {r.tags.map((t) => (
+            <span
+              key={t}
+              className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground uppercase tracking-wide"
+            >
+              {t}
+            </span>
+          ))}
+        </div>
+      )}
+    </li>
+  );
+}
 
 export function UserReviewList({ userId }: { userId: string }) {
   const { user } = useAuth();
@@ -30,6 +91,7 @@ export function UserReviewList({ userId }: { userId: string }) {
   const [reportOpen, setReportOpen] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [sort, setSort] = useState<Sort>("recent");
 
   useEffect(() => {
     let cancelled = false;
@@ -41,10 +103,32 @@ export function UserReviewList({ userId }: { userId: string }) {
         .order("created_at", { ascending: false });
       if (cancelled) return;
       if (error) { setRows([]); return; }
-      setRows(data as Row[]);
+      const reviewerIds = Array.from(new Set((data ?? []).map((d) => d.reviewer_id)));
+      const { data: profiles } = reviewerIds.length
+        ? await supabase.from("profiles").select("id, name").in("id", reviewerIds)
+        : { data: [] as { id: string; name: string | null }[] };
+      const nameMap = new Map((profiles ?? []).map((p) => [p.id, p.name]));
+      if (cancelled) return;
+      setRows((data ?? []).map((r) => ({ ...r, reviewer_name: nameMap.get(r.reviewer_id) ?? null })) as Row[]);
     })();
     return () => { cancelled = true; };
   }, [userId]);
+
+  const sorted = useMemo(() => {
+    if (!rows) return rows;
+    const copy = [...rows];
+    switch (sort) {
+      case "helpful":
+        copy.sort((a, b) => b.rating - a.rating || (b.comment?.length ?? 0) - (a.comment?.length ?? 0));
+        break;
+      case "highest": copy.sort((a, b) => b.rating - a.rating); break;
+      case "lowest": copy.sort((a, b) => a.rating - b.rating); break;
+      case "recent":
+      default:
+        copy.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    }
+    return copy;
+  }, [rows, sort]);
 
   const submitReport = async () => {
     if (!user || !reportOpen) return;
@@ -66,29 +150,28 @@ export function UserReviewList({ userId }: { userId: string }) {
 
   return (
     <>
+      <div className="flex items-center justify-end mb-3">
+        <Select value={sort} onValueChange={(v) => setSort(v as Sort)}>
+          <SelectTrigger className="h-8 w-[160px] text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="helpful">Most Helpful</SelectItem>
+            <SelectItem value="recent">Most Recent</SelectItem>
+            <SelectItem value="highest">Highest Rated</SelectItem>
+            <SelectItem value="lowest">Lowest Rated</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
       <ul className="space-y-3">
-        {rows.map((r) => (
-          <li key={r.id} className="bg-card border border-border rounded-lg p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="flex items-center gap-2">
-                  <RatingStars value={r.rating} />
-                  <span className="text-xs text-muted-foreground">from a {r.role} · {formatRelative(new Date(r.created_at).getTime())}</span>
-                </div>
-                {r.tags && r.tags.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {r.tags.map((t) => <Badge key={t} variant="secondary">{t}</Badge>)}
-                  </div>
-                )}
-                {r.comment && <p className="text-sm mt-2 whitespace-pre-line">{r.comment}</p>}
-              </div>
-              {user && user.id !== r.reviewer_id && (
-                <Button size="sm" variant="ghost" className="gap-1 text-muted-foreground" onClick={() => setReportOpen(r.id)}>
-                  <Flag className="h-3.5 w-3.5" /> Report
-                </Button>
-              )}
-            </div>
-          </li>
+        {sorted!.map((r) => (
+          <ReviewCard
+            key={r.id}
+            r={r}
+            canReport={!!user && user.id !== r.reviewer_id}
+            onReport={() => setReportOpen(r.id)}
+          />
         ))}
       </ul>
 
