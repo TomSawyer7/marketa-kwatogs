@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { AppShell } from "@/components/layout/AppShell";
 import { useMarketa } from "@/store/marketa";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -10,16 +10,33 @@ import { EmptyState } from "@/components/marketa/EmptyState";
 import { UserReviewList, useUserRating } from "@/components/reviews/UserReviewList";
 import { RatingsSummary } from "@/components/reviews/RatingsSummary";
 import { useSellerTxStats } from "@/hooks/use-seller-tx-stats";
+import { useAuth } from "@/hooks/use-auth";
+import { getOrCreateThread } from "@/lib/inbox";
 import { Bookmark, MapPin, MessageCircle, Share2, Star, Store } from "lucide-react";
 import { toast } from "sonner";
 
 const SellerPage = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const { getSeller, listings, isSaved, toggleSave } = useMarketa();
   const seller = id ? getSeller(id) : undefined;
   const rating = useUserRating(seller?.id);
   const { successfulCount } = useSellerTxStats(seller?.id);
   const [bookmarked, setBookmarked] = useState(false);
+  const [starting, setStarting] = useState(false);
+
+  const startChat = async () => {
+    if (!user) { navigate("/auth"); return; }
+    if (!seller) return;
+    if (user.id === seller.id) { toast.info("That's you."); return; }
+    setStarting(true);
+    try {
+      const tid = await getOrCreateThread(user.id, seller.id);
+      navigate(`/inbox/${tid}`);
+    } catch (e) { toast.error((e as Error).message); }
+    finally { setStarting(false); }
+  };
 
   if (!seller) {
     return (
@@ -96,10 +113,11 @@ const SellerPage = () => {
           <div className="mt-6 flex items-center gap-3">
             <Button
               className="flex-1 rounded-full h-12 text-base font-medium"
-              onClick={() => toast.info("Messaging coming soon")}
+              onClick={startChat}
+              disabled={starting}
             >
               <MessageCircle className="h-4 w-4 mr-2" />
-              Get in touch
+              {starting ? "Opening…" : "Get in touch"}
             </Button>
             <button
               onClick={() => { setBookmarked((v) => !v); }}

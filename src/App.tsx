@@ -22,6 +22,8 @@ import ResetPassword from "./pages/ResetPassword.tsx";
 import Verify from "./pages/Verify.tsx";
 import Admin from "./pages/Admin.tsx";
 import Transactions from "./pages/Transactions.tsx";
+import Inbox from "./pages/Inbox.tsx";
+import ChatThread from "./pages/ChatThread.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -51,6 +53,8 @@ const App = () => (
                   <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
                   <Route path="/transactions" element={<ProtectedRoute><Transactions /></ProtectedRoute>} />
                   <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+                  <Route path="/inbox" element={<ProtectedRoute><Inbox /></ProtectedRoute>} />
+                  <Route path="/inbox/:id" element={<ProtectedRoute><ChatThread /></ProtectedRoute>} />
                   {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                   <Route path="*" element={<NotFound />} />
                 </Routes>

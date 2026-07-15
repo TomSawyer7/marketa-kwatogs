@@ -69,12 +69,15 @@ export function Header() {
 
         <div className="flex items-center gap-1 sm:gap-2 ml-auto">
           <Button
+            asChild
             variant="ghost"
             className="rounded-md h-12 px-3 hidden sm:flex flex-col gap-0.5 items-center text-muted-foreground hover:text-foreground"
             aria-label="Inbox"
           >
-            <MessageCircle className="h-5 w-5" />
-            <span className="text-[10px] font-medium leading-none">Inbox</span>
+            <Link to={user ? "/inbox" : "/auth"}>
+              <MessageCircle className="h-5 w-5" />
+              <span className="text-[10px] font-medium leading-none">Inbox</span>
+            </Link>
           </Button>
           <Button
             asChild
