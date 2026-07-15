@@ -98,13 +98,20 @@ const Profile = () => {
         {/* Ratings aggregate */}
         {currentUserId && <RatingsSummary userId={currentUserId} userName={profile.name} />}
 
+        {/* Reviews list */}
+        {currentUserId && (
+          <div className="-mt-2">
+            <UserReviewList userId={currentUserId} />
+          </div>
+        )}
+
         {/* Tabs */}
         <Tabs defaultValue="listings">
           <TabsList>
             <TabsTrigger value="listings">Your listings</TabsTrigger>
             <TabsTrigger value="saved">Saved</TabsTrigger>
-            <TabsTrigger value="reviews">Reviews ({rating.count})</TabsTrigger>
           </TabsList>
+
 
           <TabsContent value="listings" className="mt-4">
             {myListings.length === 0 ? (
