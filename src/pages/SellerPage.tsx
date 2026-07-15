@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ListingCard } from "@/components/marketa/ListingCard";
 import { EmptyState } from "@/components/marketa/EmptyState";
 import { UserReviewList, useUserRating } from "@/components/reviews/UserReviewList";
+import { RatingsSummary } from "@/components/reviews/RatingsSummary";
 import { Calendar, MapPin, ShieldCheck, Store } from "lucide-react";
 
 const SellerPage = () => {
