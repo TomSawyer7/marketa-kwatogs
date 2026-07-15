@@ -1,43 +1,20 @@
-## Fix: RLS blocks buyers from creating a proposal
+## Problem
+`ProposalDialog` inserts `status: "proposed"`, but the DB check constraint only allows `pending_confirmation | completed | cancelled`. `TransactionHub` also references `"agreed"`. Result: insert fails with `transactions_status_check`.
 
-The existing `transactions` INSERT policy only lets the listing's seller insert a row. When a buyer clicks "Create Proposal" in a chat, PostgREST returns "new row violates row-level security policy for table transactions".
+## Fix
+Align the DB constraint with the statuses the app actually uses across the proposal → agreement → completion flow.
 
-## Migration
-
-Replace that policy with one that lets either party (buyer or seller) create a transaction, while still preventing spoofing:
-
+### Migration
 ```sql
-DROP POLICY "Seller creates transaction for own listing" ON public.transactions;
+ALTER TABLE public.transactions
+  DROP CONSTRAINT IF EXISTS transactions_status_check;
 
-CREATE POLICY "Participants create transaction"
-  ON public.transactions FOR INSERT TO authenticated
-  WITH CHECK (
-    (auth.uid() = buyer_id OR auth.uid() = seller_id)
-    AND EXISTS (
-      SELECT 1 FROM public.listings l
-      WHERE l.id = transactions.listing_id
-        AND l.seller_id = transactions.seller_id
-    )
-    AND (
-      thread_id IS NULL
-      OR EXISTS (
-        SELECT 1 FROM public.threads t
-        WHERE t.id = transactions.thread_id
-          AND (auth.uid() = t.user_a OR auth.uid() = t.user_b)
-          AND transactions.buyer_id  IN (t.user_a, t.user_b)
-          AND transactions.seller_id IN (t.user_a, t.user_b)
-      )
-    )
-  );
+ALTER TABLE public.transactions
+  ADD CONSTRAINT transactions_status_check
+  CHECK (status IN ('proposed','agreed','pending_confirmation','completed','cancelled'));
 ```
 
-Guarantees:
-- Inserter must be one of the two parties on the row.
-- `seller_id` must match the listing's real seller (buyer can't rewrite ownership).
-- If linked to a thread, both parties on the transaction must be the thread participants.
-
-## Frontend
-No changes. Existing `ProposalDialog` already sets `seller_id = listing.seller_id`, `buyer_id = the other user`, and `thread_id = current thread`.
+No frontend changes — existing `"proposed"`, `"agreed"`, `"completed"` values remain valid, and the `transactions_handshake` trigger still promotes to `completed` when both parties confirm.
 
 ## Out of scope
-Existing UPDATE policy is fine (already allows both parties).
+The user's step 4 (search fallback) isn't relevant here — the error is a failed insert in the chat, not a crash in user search. Search continues to work independently.
