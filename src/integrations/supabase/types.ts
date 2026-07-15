@@ -605,6 +605,30 @@ export type Database = {
       }
     }
     Views: {
+      profiles_public: {
+        Row: {
+          avatar_url: string | null
+          created_at: string | null
+          id: string | null
+          location: string | null
+          name: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string | null
+          id?: string | null
+          location?: string | null
+          name?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string | null
+          id?: string | null
+          location?: string | null
+          name?: string | null
+        }
+        Relationships: []
+      }
       user_rating_stats: {
         Row: {
           avg_rating: number | null
