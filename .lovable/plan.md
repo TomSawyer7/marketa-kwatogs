@@ -1,41 +1,49 @@
-## Seller-only transaction completion
 
-Replace the current mutual handshake with a one-click seller action. The moment the seller marks a transaction done, both the buyer and seller see the "Rate & Review" button and the chat gets a system message. Buyer-side rating includes a text comment (already supported by `ReviewForm`).
+## Goal
+Replace the current single-step seller completion with a double handshake:
+`discussion → seller_completed → completed`. Reviews unlock only at `completed`.
 
-### Database (single migration)
+## 1. Database migration
 
-1. **RLS on `transactions`**: replace the existing UPDATE policy with two policies:
-   - Seller can update `status` to `completed` (and set `confirmed_at`). No other status transitions allowed by buyer.
-   - Both parties can still read.
-2. **Trigger `transactions_seller_complete`** (BEFORE UPDATE): when the seller flips `status` to `completed`, stamp `confirmed_at`, `seller_confirmed_at`, and `buyer_confirmed_at` with `now()` so downstream logic (review eligibility, completed counts) treats it as fully closed. Reject any attempt by the buyer to set `status = completed`.
-3. **Drop** `transactions_handshake` trigger — no longer needed (buyer confirmation is gone).
-4. **Keep** `transactions_post_completion_message` — it already inserts the system chat bubble on completion. Update its message text to: *"The seller has marked this transaction as completed. Please rate your experience!"*
-5. Grants unchanged (already correct).
+- Add `'seller_completed'` as a valid `transactions.status` value (text column today — add a CHECK constraint listing allowed states, or extend the enum if one exists; verified during migration).
+- Drop the current `Seller updates transaction` UPDATE policy and replace with two scoped policies:
+  - **Seller mark-as-done**: `USING (auth.uid() = seller_id AND status IN ('discussion','agreed')) WITH CHECK (auth.uid() = seller_id AND status = 'seller_completed')`.
+  - **Buyer confirm**: `USING (auth.uid() = buyer_id AND status = 'seller_completed') WITH CHECK (auth.uid() = buyer_id AND status = 'completed')`.
+  - **Buyer dispute (revert)**: `USING (auth.uid() = buyer_id AND status = 'seller_completed') WITH CHECK (auth.uid() = buyer_id AND status = 'discussion')` — used by the "Not yet / Dispute" button.
+- Rewrite `transactions_seller_complete()` BEFORE UPDATE trigger:
+  - On transition to `seller_completed`: stamp `seller_confirmed_at = now()`.
+  - On transition to `completed` (from `seller_completed`): stamp `buyer_confirmed_at` and `confirmed_at = now()`.
+- Rewrite `transactions_post_completion_message()` AFTER UPDATE trigger to emit distinct system messages per transition, with `meta.event`:
+  - `seller_completed` → *"The seller marked this transaction as done. Waiting for the buyer to confirm."* (`meta.event='seller_completed'`, includes `transaction_id`).
+  - `completed` → *"Transaction successfully completed! You can now rate each other."* (`meta.event='completed'`).
+  - Buyer reverts back to `discussion` → *"The buyer indicated the transaction is not yet complete."* (`meta.event='buyer_disputed'`).
 
-### Frontend
+Rating uniqueness is already enforced by the existing `reviews` unique constraint — no token table added (per prior decision).
 
-**`src/components/inbox/TransactionHub.tsx`**
-- Remove the two-sided "You confirmed · waiting" UI.
-- Show **"Mark Transaction as Done"** button only when `myRole === "seller"` and `tx.status !== "completed"`.
-- Buyer sees a read-only stage badge ("Waiting for seller to complete") — no button.
-- On click: `update({ status: "completed" })`. RLS + trigger handle the rest. Realtime already refreshes `tx` via `useThreadTransaction`.
-- Keep the existing "Rate them" button gated by `canRate` (works for both roles once status flips).
+## 2. Frontend — `TransactionHub.tsx`
 
-**`src/pages/ChatThread.tsx`** — no change; `useReviewEligibility` already unlocks review UI as soon as `status = completed`.
+- Progress stepper stages become: `In Discussion` → `Seller Marked Done` → `Completed`.
+- Buttons:
+  - Seller, status ∈ {discussion, agreed}: **[ Mark as Done ]** → update to `seller_completed`.
+  - Seller, status = `seller_completed`: read-only text *"Waiting for buyer confirmation…"*.
+  - Buyer, status = `seller_completed`: no button here (handled by in-chat card, see §3).
+  - Status = `completed`: existing **[ Rate them ]** button (unchanged).
+- `canRate` gating stays tied to `status === 'completed'`.
 
-**`src/components/reviews/ReviewForm.tsx`** — no change; already supports rating + optional comment for both roles.
+## 3. Frontend — in-chat buyer confirmation card
 
-### Profile metrics
-Already live:
-- `useSellerTxStats` counts `transactions.status = completed` → auto-increments on completion.
-- `recalc_account_status` runs via `trg_reviews_recalc` after each review insert → aggregate rating recalculated automatically.
+- Extend `MessageBubble.tsx` to recognize system messages with `meta.event === 'seller_completed'` and render a prominent card (bordered, primary accent) instead of the plain pill, containing:
+  - Text: *"The seller has marked this transaction as completed. Did you receive your item/service?"*
+  - Buttons **[ Confirm & Rate ]** and **[ Dispute / Not Yet ]**, shown ONLY when the viewer is the buyer AND the linked transaction is still in `seller_completed` (look up via `meta.transaction_id` — pass current tx from `ThreadView` into `MessageList`/`MessageBubble` as context, or resolve by id).
+  - **Confirm & Rate** → update `transactions.status='completed'`, then trigger the existing rate flow (`onRate`) once the update returns.
+  - **Dispute / Not Yet** → update `transactions.status='discussion'` (buyer revert policy).
+  - After the transaction leaves `seller_completed`, the buttons disappear (card becomes static system text).
+- The `completed` and `buyer_disputed` system messages render as the standard centered pill.
 
-No changes needed here.
+## 4. Profile/reviews unlock
+No changes — already gated by `status='completed'` + existing `reviews` RLS/unique constraints.
 
-### Out of scope (per your answers)
-- No `rating_token` columns — existing `UNIQUE(transaction_id, reviewer_id)` on `reviews` already prevents double-rating.
-- No dedicated `/api/transactions/:id/complete` edge function — RLS + trigger enforce seller-only server-side.
-
-### Files touched
-- New migration (RLS policy swap, trigger swap, system-message text update).
-- `src/components/inbox/TransactionHub.tsx`.
+## Technical notes
+- All state transitions happen client-side via `supabase.from('transactions').update(...)`; RLS + BEFORE trigger enforce role, source-state, and timestamps. No edge function needed.
+- Wire the current `tx` from `ThreadView` down to `MessageList` → `MessageBubble` so the confirmation card knows whether to still show its buttons after realtime status changes.
+- Files touched: 1 new migration, `src/components/inbox/TransactionHub.tsx`, `src/components/inbox/MessageBubble.tsx`, `src/components/inbox/MessageList.tsx` (prop pass-through), `src/components/inbox/ThreadView.tsx` (prop pass-through + role/tx context).
