@@ -1,77 +1,71 @@
-## Verified Two-Way Ratings & Reviews — App Store style
 
-Redesign the reviews surface on `SellerPage` to match the App Store layout, and tighten the write-review guardrails so ratings are only ever generated from a completed transaction, once per party, within a fixed window.
+## Goal
 
-### 1. UI changes (frontend only)
+Swap the current `Step2Liveness` inside `src/pages/Verify.tsx` for a new active-liveness implementation powered by MediaPipe FaceMesh (loaded via CDN). Nothing else in the file changes.
 
-**New component `src/components/reviews/RatingsSummary.tsx`**
-- Large aggregate score ("4.8") + "out of 5"
-- Total count ("894 Ratings")
-- 5→1 star horizontal distribution bars (computed client-side from fetched reviews)
-- "Tap to Rate" star row + "Write a Review" button
-  - Locked by default; enabled only when the viewer has an eligible transaction token (see logic below)
-  - Locked state shows message: *"You can only rate users you have successfully transacted with."*
+## Scope
 
-**Update `src/components/reviews/UserReviewList.tsx`**
-- Card layout inspired by App Store: bold title (auto-derived from first tag, e.g. "Helpful"), star row, `1y ago · Reviewer Name`, body text with **Read more / Read less** toggle (truncate ~180 chars)
-- Sort dropdown: **Most Recent**, **Most Helpful** (highest rating, then longest comment), **Highest**, **Lowest**
-- Keep existing report action
+- Only `Step2Liveness` in `src/pages/Verify.tsx` is rewritten.
+- `IDVerification`, `Stepper`, `PendingPanel`, `SuccessPanel`, and the default `Verify` export stay byte-identical.
+- No npm installs; MediaPipe loaded via `<script>` tags injected into `document.head`.
+- Existing edge function contract preserved: `supabase.functions.invoke("verify-liveness", { body: { action, frames } })`.
 
-**Wire into `SellerPage.tsx`**
-- Replace current "Reviews" tab content with `RatingsSummary` on top + filtered `UserReviewList` below
-- Move avg-rating chip in header to reuse the same hook
+## New Step2Liveness behavior
 
-**Design language**
-- Dark-card look matching reference: `bg-card` rounded-2xl, muted bar tracks (`bg-muted`) with `bg-foreground` fills, `text-primary` accents on active stars and "Tap to Rate" and sort control (kept theme-token based, no hardcoded colors)
+1. **CDN loader**
+   - On mount, inject (if not already present) two script tags into `<head>`:
+     - `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js`
+     - `https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js`
+   - Await both `load` events, then instantiate `FaceMesh` (with `locateFile` pointing at the jsdelivr CDN) and `Camera`. Show a "Loading face detection…" state until ready.
 
-### 2. Guardrail logic (uses existing schema — no migration)
+2. **Challenge pool** (pick 4 at random per session, no repeats):
+   - `blink` — EAR from left `[362,385,387,263,373,380]` + right `[33,160,158,133,153,144]`; count a blink when avg EAR drops below `0.20` then recovers above `0.25`. Require **2 blinks**.
+   - `smile` — `dist(61,291) / dist(234,454) > 0.48`.
+   - `turn_left` — `landmark[1].x - (landmark[234].x + landmark[454].x)/2 < -0.07`.
+   - `turn_right` — same expression `> 0.07`.
+   - `look_up` — `(y1 - y10) / (y152 - y10) < 0.40`.
+   - `look_down` — same ratio `> 0.60`.
 
-The `transactions` and `reviews` tables already model this. We formalize the rules on the client:
+3. **Sequential UX**
+   - Show one challenge at a time with prompt + "Challenge N of 4" progress.
+   - On pass, wait 1s (with a brief "✓ Passed" flash), then advance.
+   - Live video preview with an overlay showing current instruction.
 
-```
-canReview(viewer, profileOwner) =
-  exists tx in transactions where
-    tx.status == 'completed'
-    AND ((tx.buyer_id == viewer AND tx.seller_id == profileOwner)
-      OR (tx.seller_id == viewer AND tx.buyer_id == profileOwner))
-    AND tx.confirmed_at >= now() - REVIEW_WINDOW_DAYS
-    AND NOT exists review where
-        review.transaction_id == tx.id AND review.reviewer_id == viewer
-```
+4. **Frame collection**
+   - While challenges run, every 800ms draw the current video frame to an offscreen canvas (640×480) and push the JPEG base64 (`toDataURL('image/jpeg', 0.82)`) into a `frames` array, capped at **10 frames**.
+   - After all 4 challenges pass, capture one final snapshot and append (still respecting the 10-frame cap; final frame replaces oldest if full).
 
-- `REVIEW_WINDOW_DAYS = 14` (constant in `src/lib/reviews.ts`)
-- Query runs on profile load; returns the eligible `transaction_id` + role (buyer/seller)
-- If eligible → unlock "Tap to Rate" / "Write a Review", pass token into existing `ReviewForm`
-- If not eligible → disabled state with tooltip explaining the reason (no tx, expired, already reviewed)
-- Existing DB constraints (`reviews` unique on `transaction_id, reviewer_id`, and RLS requiring completed tx) remain the source of truth server-side; UI just mirrors them
+5. **Server call**
+   - Map first challenge → `action.key`:
+     - `blink` → `"blink"`
+     - `smile` → `"smile"`
+     - `turn_left` / `turn_right` → `"turn_head"`
+     - `look_up` / `look_down` → `"turn_head"` (fallback)
+   - Call:
+     ```ts
+     supabase.functions.invoke("verify-liveness", {
+       body: { action: action.key, frames },
+     })
+     ```
 
-### 3. Deliverables per user request
+6. **Result UI**
+   - Same visual pattern as current version: green card on pass (with score + reason), red card on fail, "Try again" resets state.
+   - Uses existing shadcn `Button` and current Tailwind card classes.
 
-**Component schema** (documented in a short block inside `RatingsSummary.tsx`):
-```
-RatingsSummary
-├── AggregateHeader  { avg, count }
-├── DistributionBars { counts[1..5] }
-├── TapToRate        { locked, onRate }
-└── WriteReviewCTA   { locked, lockReason, onOpenForm }
+7. **Cleanup**
+   - On unmount or reset: stop `MediaStream` tracks, call `camera.stop()`, close `faceMesh`, clear interval for frame capture, and null refs.
 
-ReviewCard
-├── Title       (derived from top tag)
-├── Stars       (1–5)
-├── Meta        { relativeTime, reviewerName }
-└── Body        { text, truncated, onToggle }
+## Technical notes (for implementer)
 
-ReviewList
-└── SortControl { Most Recent | Most Helpful | Highest | Lowest }
-```
+- Types: declare `window.FaceMesh` / `window.Camera` as `any` locally to avoid adding `@types/*`.
+- Phases: `loading | ready | running | submitting | result`.
+- Use refs for `videoRef`, `canvasRef`, `faceMeshRef`, `cameraRef`, `framesRef`, `blinkStateRef` (below-threshold latch + count).
+- Randomize challenges with a Fisher–Yates shuffle over the 6 keys, take first 4.
+- Guard against double-advance by using a "cooldown" flag per challenge; smile/turn/look require the condition to hold for ~300ms (3 consecutive detections) to avoid flicker.
+- Keep imports already present in `Verify.tsx` (Button, supabase, etc.); no new deps.
 
-**DB logic** — no schema change; reuse existing tables. Eligibility pseudocode above will live in a new hook `useReviewEligibility(profileOwnerId)` in `src/hooks/use-review-eligibility.ts`.
+## Out of scope
 
-### Files touched
-- new: `src/components/reviews/RatingsSummary.tsx`
-- new: `src/hooks/use-review-eligibility.ts`
-- edit: `src/components/reviews/UserReviewList.tsx` (App Store card + sort + read more)
-- edit: `src/pages/SellerPage.tsx` (compose summary + list)
-- edit: `src/lib/reviews.ts` (add `REVIEW_WINDOW_DAYS`)
-
-Scope stays frontend + one read-only hook; no migrations, no backend changes.
+- No changes to the edge function.
+- No changes to other components, styling primitives, or the routing.
+- No new packages.
