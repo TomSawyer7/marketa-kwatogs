@@ -48,10 +48,29 @@ const ItemDetail = () => {
   const isMine = !!currentUserId && listing.sellerId === currentUserId;
   const category = CATEGORIES.find((c) => c.slug === listing.category);
 
-  const onSendMessage = () => {
-    if (!message.trim()) return;
-    toast.success("Message sent", { description: "(Demo only — no real messaging.)" });
-    setMessage("");
+  const onSendMessage = async () => {
+    if (!user) {
+      navigate("/auth");
+      return;
+    }
+    const body = (message.trim() || `Hi! Is "${listing.title}" still available?`);
+    setSending(true);
+    try {
+      const threadId = await getOrCreateThread(user.id, listing.sellerId, listing.id);
+      const { error } = await supabase.from("messages").insert({
+        thread_id: threadId,
+        sender_id: user.id,
+        body,
+        kind: "text",
+      });
+      if (error) throw error;
+      setMessage("");
+      navigate(`/inbox/${threadId}`);
+    } catch (err) {
+      toast.error((err as Error).message ?? "Failed to send message");
+    } finally {
+      setSending(false);
+    }
   };
 
   const onDelete = async () => {
