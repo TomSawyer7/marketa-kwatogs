@@ -4,7 +4,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { useMarketa } from "@/store/marketa";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Bookmark, MapPin, MessageCircle, Share2, ShieldCheck, Pencil, Trash2, ArrowLeft, ChevronLeft, ChevronRight, PackageCheck } from "lucide-react";
+import { Bookmark, MapPin, MessageCircle, Share2, ShieldCheck, Pencil, Trash2, ArrowLeft, ChevronLeft, ChevronRight, PackageCheck, Loader2 } from "lucide-react";
 import { formatPrice, formatRelative } from "@/lib/format";
 import { CATEGORIES } from "@/lib/categories";
 import { toast } from "sonner";
@@ -15,13 +15,18 @@ import {
 import { cn } from "@/lib/utils";
 import { BuyerPickerDialog } from "@/components/reviews/BuyerPickerDialog";
 import { useUserRating } from "@/components/reviews/UserReviewList";
+import { useAuth } from "@/hooks/use-auth";
+import { getOrCreateThread } from "@/lib/inbox";
+import { supabase } from "@/integrations/supabase/client";
 
 const ItemDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { getListing, getSeller, isSaved, toggleSave, deleteListing, currentUserId } = useMarketa();
+  const { user } = useAuth();
   const [imgIndex, setImgIndex] = useState(0);
   const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
   const [buyerPickerOpen, setBuyerPickerOpen] = useState(false);
 
   const listing = id ? getListing(id) : undefined;
@@ -43,10 +48,29 @@ const ItemDetail = () => {
   const isMine = !!currentUserId && listing.sellerId === currentUserId;
   const category = CATEGORIES.find((c) => c.slug === listing.category);
 
-  const onSendMessage = () => {
-    if (!message.trim()) return;
-    toast.success("Message sent", { description: "(Demo only — no real messaging.)" });
-    setMessage("");
+  const onSendMessage = async () => {
+    if (!user) {
+      navigate("/auth");
+      return;
+    }
+    const body = (message.trim() || `Hi! Is "${listing.title}" still available?`);
+    setSending(true);
+    try {
+      const threadId = await getOrCreateThread(user.id, listing.sellerId, listing.id);
+      const { error } = await supabase.from("messages").insert({
+        thread_id: threadId,
+        sender_id: user.id,
+        body,
+        kind: "text",
+      });
+      if (error) throw error;
+      setMessage("");
+      navigate(`/inbox/${threadId}`);
+    } catch (err) {
+      toast.error((err as Error).message ?? "Failed to send message");
+    } finally {
+      setSending(false);
+    }
   };
 
   const onDelete = async () => {
@@ -225,8 +249,9 @@ const ItemDetail = () => {
                   rows={3}
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
                 />
-                <Button onClick={onSendMessage} className="w-full mt-2 gap-2">
-                  <MessageCircle className="h-4 w-4" />Send message
+                <Button onClick={onSendMessage} disabled={sending} className="w-full mt-2 gap-2">
+                  {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
+                  {sending ? "Sending…" : "Send message"}
                 </Button>
               </div>
             )}
