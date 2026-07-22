@@ -33,13 +33,13 @@ type Row = {
 type Sort = "recent" | "helpful" | "highest" | "lowest";
 const TRUNCATE = 180;
 
-function ReviewCard({ r, onReport, canReport }: { r: Row; onReport: () => void; canReport: boolean }) {
+function ReviewCard({ r, onReport, canReport, canAppeal, onAppeal }: { r: Row; onReport: () => void; canReport: boolean; canAppeal: boolean; onAppeal: () => void }) {
   const [expanded, setExpanded] = useState(false);
-  const comment = r.comment ?? "";
+  const commentHidden = r.status === "removed_review_only";
+  const comment = commentHidden ? "" : (r.comment ?? "");
   const long = comment.length > TRUNCATE;
   const shown = expanded || !long ? comment : comment.slice(0, TRUNCATE).trimEnd() + "…";
   const title = r.tags?.[0] ?? (r.rating >= 4 ? "Great experience" : r.rating >= 3 ? "Okay" : "Needs improvement");
-  const positive = r.tags?.some((t) => (POSITIVE_TAGS as readonly string[]).includes(t)) ?? r.rating >= 4;
 
   return (
     <li className="bg-card border border-border rounded-2xl p-5">
@@ -53,13 +53,22 @@ function ReviewCard({ r, onReport, canReport }: { r: Row; onReport: () => void; 
             </span>
           </div>
         </div>
-        {canReport && (
-          <Button size="sm" variant="ghost" className="gap-1 text-muted-foreground -mr-2" onClick={onReport}>
-            <Flag className="h-3.5 w-3.5" />
-          </Button>
-        )}
+        <div className="flex items-center gap-1 -mr-2">
+          {canAppeal && (
+            <Button size="sm" variant="ghost" className="gap-1 text-muted-foreground" onClick={onAppeal} title="Appeal this review">
+              <ShieldAlert className="h-3.5 w-3.5" />
+            </Button>
+          )}
+          {canReport && (
+            <Button size="sm" variant="ghost" className="gap-1 text-muted-foreground" onClick={onReport} title="Report this review">
+              <Flag className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
       </div>
-      {comment && (
+      {commentHidden ? (
+        <p className="mt-3 text-sm italic text-muted-foreground">Comment removed by moderation.</p>
+      ) : comment ? (
         <div className="mt-3">
           <p className="text-sm whitespace-pre-line text-foreground/90">{shown}</p>
           {long && (
@@ -71,8 +80,8 @@ function ReviewCard({ r, onReport, canReport }: { r: Row; onReport: () => void; 
             </button>
           )}
         </div>
-      )}
-      {r.tags && r.tags.length > 0 && (
+      ) : null}
+      {!commentHidden && r.tags && r.tags.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">
           {r.tags.map((t) => (
             <span
