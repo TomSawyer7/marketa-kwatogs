@@ -27,19 +27,30 @@ export function TrustPanel() {
   const [reports, setReports] = useState<Report[]>([]);
   const [appeals, setAppeals] = useState<Appeal[]>([]);
   const [restricted, setRestricted] = useState<Status[]>([]);
+  const [reviewAppeals, setReviewAppeals] = useState<ReviewAppeal[]>([]);
 
   const load = useCallback(async () => {
-    const [r, a, s] = await Promise.all([
+    const [r, a, s, ra] = await Promise.all([
       supabase.from("review_reports").select("id, review_id, reporter_id, reason, status, created_at, reviews:review_id(id, rating, comment, reviewee_id)").order("created_at", { ascending: false }),
       supabase.from("account_appeals").select("id, user_id, message, status, created_at, admin_note").order("created_at", { ascending: false }),
       supabase.from("account_status").select("user_id, status, reason, updated_at").neq("status", "active").order("updated_at", { ascending: false }),
+      (supabase.from("review_appeals") as any).select("id, review_id, transaction_id, seller_id, buyer_id, reason, evidence_urls, buyer_chat_consent, seller_chat_consent, status, admin_notes, created_at, reviews:review_id(id, rating, comment)").order("created_at", { ascending: false }),
     ]);
     setReports((r.data as Report[]) ?? []);
     setAppeals((a.data as Appeal[]) ?? []);
     setRestricted((s.data as Status[]) ?? []);
+    setReviewAppeals(((ra as any).data as ReviewAppeal[]) ?? []);
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const resolveReviewAppeal = async (id: string, status: ReviewAppeal["status"], note?: string) => {
+    const { error } = await (supabase.from("review_appeals") as any)
+      .update({ status, admin_notes: note ?? null })
+      .eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success(`Appeal marked ${status}`); load();
+  };
 
   const resolveReport = async (id: string, status: "upheld" | "dismissed") => {
     const { data: auth } = await supabase.auth.getUser();
