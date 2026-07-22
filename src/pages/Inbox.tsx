@@ -16,6 +16,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { ChatPane } from "@/components/inbox/ChatPane";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { ProfilePeekDialog } from "@/components/inbox/ProfilePeekDialog";
 
 type Person = { id: string; name: string | null; avatar_url: string | null; location: string | null };
 
