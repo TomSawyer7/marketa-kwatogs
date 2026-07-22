@@ -190,9 +190,20 @@ export function UserReviewList({ userId }: { userId: string }) {
             r={r}
             canReport={!!user && user.id !== r.reviewer_id}
             onReport={() => setReportOpen(r.id)}
+            canAppeal={!!user && user.id === r.reviewee_id && r.status === "active" && !appealedIds.has(r.id)}
+            onAppeal={() => setAppealOpen(r.id)}
           />
         ))}
       </ul>
+
+      {appealOpen && (
+        <AppealReviewDialog
+          open={!!appealOpen}
+          onOpenChange={(v) => !v && setAppealOpen(null)}
+          reviewId={appealOpen}
+          onCreated={() => { setAppealOpen(null); loadRows(); }}
+        />
+      )}
 
       <Dialog open={!!reportOpen} onOpenChange={(v) => !v && setReportOpen(null)}>
         <DialogContent>
