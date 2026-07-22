@@ -1,64 +1,29 @@
-## Chat & Inbox UI Refactor — Header, Stepper, Proposals, Profile Peek
+## Problem
 
-Scope is presentation-layer polish on top of the existing `threads` / `messages` / `transactions` tables. No schema changes needed: our current `transactions.status` (`proposed` → `agreed` → `seller_completed` → `completed`) already maps to the three stepper stages, and proposals live as `messages.kind = 'proposal'` linked to a `transactions` row. I'll keep that model rather than introducing new `conversations` / `proposals` tables.
+The **View full profile ↗** button inside `ProfilePeekDialog` is unresponsive. It currently uses `<Button asChild><Link to={`/seller/${id}`} onClick={() => onOpenChange(false)}>`. Radix Dialog closes on the same tick, unmounting the `<Link>` before React Router processes the click — so nothing happens.
 
-### 1. Chat header — cleaner + clickable profile
+## Fix
 
-`src/components/inbox/ChatPane.tsx`
-- Slim the header to one row: avatar + name + presence dot + a right-side "kebab" menu (report / mute placeholder).
-- Wrap avatar and name in a button that opens a new `ProfilePeekDialog` instead of navigating away. Long-press / kebab still exposes "Open full profile" → `/seller/:id`.
-- Remove the current busy `Link` styling; use `hover:underline` on name only.
+### 1. `src/components/inbox/ProfilePeekDialog.tsx`
+- Replace the `Link`-based button with an imperative `useNavigate()` handler.
+- Close the dialog first, then navigate on the next tick so the overlay tears down cleanly and doesn't lock scroll:
+  ```ts
+  const navigate = useNavigate();
+  const handleView = () => {
+    if (!profile?.id) return;
+    onOpenChange(false);
+    setTimeout(() => navigate(`/seller/${profile.id}`), 0);
+  };
+  ```
+- Disable the button when `profile?.id` is missing (defensive guard).
+- Keep the mini-listing `<Link>`s as-is but also switch them to `useNavigate` with the same close-then-navigate pattern to avoid the same class of bug.
 
-New: `src/components/inbox/ProfilePeekDialog.tsx` (shadcn `Dialog`, `Sheet` on mobile)
-- Loads from `profiles` + `verified_users` + `reviews` aggregate + user's active `listings` (limit 6).
-- Sections: avatar/name/joined date/verified badge → rating summary (reuse `RatingsSummary` compact variant) → active listings grid (reuse `ListingCard` small).
-- Footer: "View full profile" link to `/seller/:id`, "Message" (closes dialog since we're already in the thread).
+### 2. No routing changes needed
+- `/seller/:id` is already registered in `src/App.tsx` and `SellerPage.tsx` already renders the full profile (header, metrics, ratings summary, review list, listings). No new `/profile/:id` route needed — the existing seller page is the canonical public profile.
 
-### 2. Transaction stepper + proposal bar (fix visual clutter)
+### 3. No other files touched
+- `Inbox.tsx` already passes `peekId` (a valid `otherId` from `InboxRow`) so the userId guard is satisfied upstream; the in-component guard is added for safety.
 
-Refactor `src/components/inbox/TransactionHub.tsx` into a compact two-part strip directly under the header:
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│  ● In Discussion ──── ○ Marked Done ──── ○ Completed        │
-├─────────────────────────────────────────────────────────────┤
-│  [contextual action row — one primary CTA + secondary]      │
-└─────────────────────────────────────────────────────────────┘
-```
-
-- **Stepper**: replace the current pill row with a thin connected stepper (dot + label + hairline connector). Active step tinted `primary`, done steps filled, pending steps muted. Collapses to icons-only under 380px.
-- **Action row** — exactly one primary button per state, no floating extras:
-  - No tx yet → `+ Create Proposal` (primary).
-  - Tx `proposed`/`agreed`, viewer = seller → `Mark as Done` (primary) + subtle "Edit proposal" text button.
-  - Tx `proposed`/`agreed`, viewer = buyer → muted status text "Waiting for seller to mark as done".
-  - Tx `seller_completed`, viewer = buyer → `Confirm & Rate Seller` (primary; confirms + opens review dialog).
-  - Tx `seller_completed`, viewer = seller → muted "Waiting for buyer confirmation".
-  - Tx `completed` → `Write a Review` if `canRate`, else "Transaction completed" muted line.
-
-New: `ProposalCardBanner` (rendered inline in the action row when there's a pending proposal message and `tx.status IN ('proposed','agreed')`)
-- Compact card: listing thumb + title + proposed price + `Accept` / `Decline` / `Counter` (counter reopens `ProposalDialog` prefilled).
-- Accept → update `transactions.status` to `agreed`. Decline → set to `discussion` + system message. Counter → new proposal message + updated tx amount.
-
-### 3. Sidebar row — profile peek + dedup polish
-
-`src/pages/Inbox.tsx` (`ThreadItem`)
-- Clicking the avatar (not the row) opens the same `ProfilePeekDialog`. Row click still opens the thread.
-- Dedup is already enforced at the DB level via the unique index on `(user_a, user_b, listing_id)`, so no schema work; just verify `useInbox` doesn't render stale duplicates after the earlier merge migration.
-
-### 4. Preserved from prior work
-- Messenger hover actions (reply/edit/unsend/remove image) in `MessageBubble` stay untouched.
-- `chat-attachments` signed URLs stay untouched.
-
-### Files touched
-
-- edit `src/components/inbox/ChatPane.tsx` — slim header, wire profile peek
-- edit `src/components/inbox/TransactionHub.tsx` — new stepper + single-CTA action row
-- new `src/components/inbox/ProfilePeekDialog.tsx`
-- new `src/components/inbox/ProposalCardBanner.tsx`
-- edit `src/components/inbox/ProposalDialog.tsx` — support counter/prefill
-- edit `src/pages/Inbox.tsx` — avatar-click opens peek
-- minor: `src/components/reviews/RatingsSummary.tsx` — add `compact` prop if not present
-
-### Out of scope (call out explicitly)
-- No new `conversations` / `proposals` tables — existing `threads` + `transactions` + `messages(kind='proposal')` already model this and are wired to RLS, realtime, and the completion state machine. Adding parallel tables would fork state.
-- No changes to review eligibility rules or completion triggers.
+## Out of scope
+- Redesigning the full profile page (already exists at `/seller/:id`).
+- Adding a separate `/profile/:id` route — would duplicate `SellerPage`.

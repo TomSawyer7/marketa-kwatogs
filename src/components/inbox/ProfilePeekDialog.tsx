@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -34,12 +34,18 @@ export function ProfilePeekDialog({
   onOpenChange: (v: boolean) => void;
   userId: string | null;
 }) {
+  const navigate = useNavigate();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [verified, setVerified] = useState(false);
   const [avg, setAvg] = useState<number | null>(null);
   const [count, setCount] = useState(0);
   const [listings, setListings] = useState<MiniListing[]>([]);
   const [loading, setLoading] = useState(false);
+
+  const goTo = (path: string) => {
+    onOpenChange(false);
+    setTimeout(() => navigate(path), 0);
+  };
 
   useEffect(() => {
     if (!open || !userId) return;
@@ -116,11 +122,11 @@ export function ProfilePeekDialog({
               ) : (
                 <div className="grid grid-cols-3 gap-2">
                   {listings.map((l) => (
-                    <Link
+                    <button
                       key={l.id}
-                      to={`/item/${l.id}`}
-                      onClick={() => onOpenChange(false)}
-                      className="group block rounded-lg overflow-hidden bg-muted"
+                      type="button"
+                      onClick={() => goTo(`/item/${l.id}`)}
+                      className="group block rounded-lg overflow-hidden bg-muted text-left"
                     >
                       <div className="aspect-square bg-secondary overflow-hidden">
                         {l.images?.[0] && (
@@ -136,7 +142,7 @@ export function ProfilePeekDialog({
                         <div className="text-[11px] font-semibold truncate">{formatPrice(l.price)}</div>
                         <div className="text-[10px] text-muted-foreground truncate">{l.title}</div>
                       </div>
-                    </Link>
+                    </button>
                   ))}
                 </div>
               )}
@@ -147,10 +153,12 @@ export function ProfilePeekDialog({
         <DialogFooter className="sm:justify-between gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
           {profile && (
-            <Button asChild className="gap-1.5">
-              <Link to={`/seller/${profile.id}`} onClick={() => onOpenChange(false)}>
-                View full profile <ArrowUpRight className="h-4 w-4" />
-              </Link>
+            <Button
+              className="gap-1.5"
+              disabled={!profile.id}
+              onClick={() => goTo(`/seller/${profile.id}`)}
+            >
+              View full profile <ArrowUpRight className="h-4 w-4" />
             </Button>
           )}
         </DialogFooter>
