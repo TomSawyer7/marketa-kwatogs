@@ -12,6 +12,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useState, FormEvent } from "react";
 import { toast } from "sonner";
 import { CategoryBar } from "./CategoryBar";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 export function Header() {
   const navigate = useNavigate();
@@ -90,6 +91,7 @@ export function Header() {
               <span className="text-[10px] font-medium leading-none">Saved</span>
             </Link>
           </Button>
+          {user && <NotificationBell />}
 
           <Button asChild variant="default" size="sm" className="rounded-full gap-1.5 h-10 px-4">
             <Link to="/sell" onClick={handleSell}><Plus className="h-4 w-4" />Sell</Link>

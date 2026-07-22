@@ -8,8 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { formatRelative } from "@/lib/format";
 import { RatingStars } from "@/components/reviews/RatingStars";
-import { ShieldAlert, Eye } from "lucide-react";
+import { ShieldAlert, Eye, Gavel } from "lucide-react";
 import { AppealChatViewer } from "@/components/admin/AppealChatViewer";
+import { ResolveAppealDialog } from "@/components/admin/ResolveAppealDialog";
 
 type Report = { id: string; review_id: string; reporter_id: string; reason: string; status: string; created_at: string;
   reviews?: { id: string; rating: number; comment: string | null; reviewee_id: string } | null };
@@ -30,6 +31,7 @@ export function TrustPanel() {
   const [restricted, setRestricted] = useState<Status[]>([]);
   const [reviewAppeals, setReviewAppeals] = useState<ReviewAppeal[]>([]);
   const [viewerAppeal, setViewerAppeal] = useState<ReviewAppeal | null>(null);
+  const [resolveAppealId, setResolveAppealId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const [r, a, s, ra] = await Promise.all([
@@ -135,7 +137,7 @@ export function TrustPanel() {
                   )}
                 </div>
                 {active && (
-                  <div className="flex flex-col gap-2 shrink-0 w-[180px]">
+                  <div className="flex flex-col gap-2 shrink-0 w-[200px]">
                     <Select value={a.status} onValueChange={(v) => resolveReviewAppeal(a.id, v as ReviewAppeal["status"])}>
                       <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -143,15 +145,11 @@ export function TrustPanel() {
                         <SelectItem value="Waiting for Consent">Waiting for Consent</SelectItem>
                         <SelectItem value="Under Review">Under Review</SelectItem>
                         <SelectItem value="Waiting for Additional Evidence">Waiting for Evidence</SelectItem>
-                        <SelectItem value="Approved">Approved (remove review)</SelectItem>
-                        <SelectItem value="Rejected">Rejected</SelectItem>
-                        <SelectItem value="Resolved">Resolved</SelectItem>
                       </SelectContent>
                     </Select>
-                    <Button size="sm" variant="outline" onClick={() => {
-                      const note = prompt("Admin note (optional):") ?? undefined;
-                      resolveReviewAppeal(a.id, a.status, note);
-                    }}>Add note</Button>
+                    <Button size="sm" className="gap-1" onClick={() => setResolveAppealId(a.id)}>
+                      <Gavel className="h-3.5 w-3.5" /> Resolve appeal…
+                    </Button>
                   </div>
                 )}
               </div>
@@ -240,6 +238,12 @@ export function TrustPanel() {
         transactionId={viewerAppeal?.transaction_id ?? null}
         appealStatus={viewerAppeal?.status ?? ""}
         bothConsented={!!(viewerAppeal?.buyer_chat_consent && viewerAppeal?.seller_chat_consent)}
+      />
+      <ResolveAppealDialog
+        appealId={resolveAppealId}
+        open={!!resolveAppealId}
+        onOpenChange={(v) => { if (!v) setResolveAppealId(null); }}
+        onResolved={load}
       />
     </Tabs>
   );
