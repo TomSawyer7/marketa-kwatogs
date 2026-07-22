@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Flag, MessageSquare } from "lucide-react";
+import { Flag, MessageSquare, ShieldAlert } from "lucide-react";
 import { formatRelative } from "@/lib/format";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -15,6 +15,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { POSITIVE_TAGS } from "@/lib/reviews";
+import { AppealReviewDialog } from "./AppealReviewDialog";
 
 type Row = {
   id: string;
