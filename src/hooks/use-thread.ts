@@ -11,8 +11,11 @@ export type ChatState = {
   otherProfile: { id: string; name: string; avatar_url: string | null } | null;
   typing: boolean;
   online: boolean;
-  send: (body: string) => Promise<void>;
-  sendImage: (file: File, caption?: string) => Promise<void>;
+  send: (body: string, replyToId?: string | null) => Promise<void>;
+  sendImage: (file: File, caption?: string, replyToId?: string | null) => Promise<void>;
+  editMessage: (id: string, body: string) => Promise<void>;
+  unsendMessage: (id: string) => Promise<void>;
+  removeImage: (id: string) => Promise<void>;
   sendTyping: () => void;
 };
 
@@ -30,7 +33,6 @@ export function useThread(threadId: string | undefined): ChatState {
   const otherId =
     thread && user ? (thread.user_a === user.id ? thread.user_b : thread.user_a) : null;
 
-  // Fetch thread + messages + other profile
   useEffect(() => {
     if (!threadId || !user) return;
     let cancelled = false;
@@ -60,7 +62,6 @@ export function useThread(threadId: string | undefined): ChatState {
       setOtherProfile(prof as ChatState["otherProfile"]);
       setLoading(false);
 
-      // mark unread messages read
       await supabase
         .from("messages")
         .update({ read_at: new Date().toISOString() })
@@ -72,7 +73,6 @@ export function useThread(threadId: string | undefined): ChatState {
     return () => { cancelled = true; };
   }, [threadId, user]);
 
-  // Realtime + presence
   useEffect(() => {
     if (!threadId || !user || !otherId) return;
 
@@ -128,13 +128,14 @@ export function useThread(threadId: string | undefined): ChatState {
   }, [threadId, user, otherId]);
 
   const send = useCallback(
-    async (body: string) => {
+    async (body: string, replyToId?: string | null) => {
       if (!threadId || !user || !body.trim()) return;
       const { error } = await supabase.from("messages").insert({
         thread_id: threadId,
         sender_id: user.id,
         body: body.trim(),
         kind: "text",
+        reply_to_message_id: replyToId ?? null,
       });
       if (error) throw error;
     },
@@ -142,7 +143,7 @@ export function useThread(threadId: string | undefined): ChatState {
   );
 
   const sendImage = useCallback(
-    async (file: File, caption?: string) => {
+    async (file: File, caption?: string, replyToId?: string | null) => {
       if (!threadId || !user) return;
       if (!file.type.startsWith("image/")) throw new Error("Only image files are supported.");
       if (file.size > 5 * 1024 * 1024) throw new Error("Image must be under 5 MB.");
@@ -155,14 +156,47 @@ export function useThread(threadId: string | undefined): ChatState {
       const { error } = await supabase.from("messages").insert({
         thread_id: threadId,
         sender_id: user.id,
-        body: caption?.trim() ?? "",
+        body: caption?.trim() ?? null,
         kind: "text",
         image_url: path,
+        reply_to_message_id: replyToId ?? null,
       });
       if (error) throw error;
     },
     [threadId, user],
   );
+
+  const editMessage = useCallback(async (id: string, body: string) => {
+    if (!body.trim()) return;
+    const { error } = await supabase
+      .from("messages")
+      .update({ body: body.trim() })
+      .eq("id", id);
+    if (error) throw error;
+  }, []);
+
+  const unsendMessage = useCallback(async (id: string) => {
+    const target = messages.find((m) => m.id === id);
+    if (target?.image_url) {
+      await supabase.storage.from("chat-attachments").remove([target.image_url]).then(() => {});
+    }
+    const { error } = await supabase
+      .from("messages")
+      .update({ is_unsent: true })
+      .eq("id", id);
+    if (error) throw error;
+  }, [messages]);
+
+  const removeImage = useCallback(async (id: string) => {
+    const target = messages.find((m) => m.id === id);
+    if (!target?.image_url) return;
+    await supabase.storage.from("chat-attachments").remove([target.image_url]).then(() => {});
+    const { error } = await supabase
+      .from("messages")
+      .update({ image_url: null })
+      .eq("id", id);
+    if (error) throw error;
+  }, [messages]);
 
   const sendTyping = useCallback(() => {
     if (!channelRef.current || !user) return;
@@ -179,6 +213,9 @@ export function useThread(threadId: string | undefined): ChatState {
     online,
     send,
     sendImage,
+    editMessage,
+    unsendMessage,
+    removeImage,
     sendTyping,
   };
 }
