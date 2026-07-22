@@ -234,6 +234,13 @@ export function TrustPanel() {
           </div>
         ))}
       </TabsContent>
+      <AppealChatViewer
+        open={!!viewerAppeal}
+        onOpenChange={(v) => { if (!v) setViewerAppeal(null); }}
+        transactionId={viewerAppeal?.transaction_id ?? null}
+        appealStatus={viewerAppeal?.status ?? ""}
+        bothConsented={!!(viewerAppeal?.buyer_chat_consent && viewerAppeal?.seller_chat_consent)}
+      />
     </Tabs>
   );
 }
