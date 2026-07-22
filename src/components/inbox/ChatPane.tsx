@@ -28,6 +28,8 @@ export function ChatPane({ threadId, onBack, showBack }: Props) {
   const { tx } = useThreadTransaction(threadId ?? undefined);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [listing, setListing] = useState<ListingContext | null>(null);
+  const [replyTo, setReplyTo] = useState<import("@/lib/inbox").Message | null>(null);
+  const [editing, setEditing] = useState<import("@/lib/inbox").Message | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const eligibility = useReviewEligibility(chat.otherId ?? undefined);
