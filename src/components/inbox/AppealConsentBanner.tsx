@@ -19,18 +19,37 @@ type AppealRow = {
 export function AppealConsentBanner({ transactionId }: { transactionId: string | null | undefined }) {
   const { user } = useAuth();
   const [row, setRow] = useState<AppealRow | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     if (!transactionId || !user) { setRow(null); return; }
-    const { data } = await (supabase.from("review_appeals") as any)
+    const { data, error } = await (supabase.from("review_appeals") as any)
       .select("id, seller_id, buyer_id, buyer_chat_consent, seller_chat_consent, status, reason")
       .eq("transaction_id", transactionId)
       .not("status", "in", "(Approved,Rejected,Resolved)")
       .maybeSingle();
+    if (error) console.error("[AppealConsentBanner] load error", error);
     setRow((data as AppealRow) ?? null);
   }, [transactionId, user]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Realtime: reflect the other party's consent flips live.
+  useEffect(() => {
+    if (!row?.id) return;
+    const ch = supabase
+      .channel(`appeal:${row.id}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "review_appeals", filter: `id=eq.${row.id}` },
+        (payload) => {
+          const n = payload.new as AppealRow;
+          setRow((prev) => (prev ? { ...prev, ...n } : prev));
+        },
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [row?.id]);
 
   if (!row || !user) return null;
   const isBuyer = user.id === row.buyer_id;
@@ -41,11 +60,27 @@ export function AppealConsentBanner({ transactionId }: { transactionId: string |
   const otherConsent = isBuyer ? row.seller_chat_consent : row.buyer_chat_consent;
 
   const toggle = async (value: boolean) => {
+    if (busy) return;
+    setBusy(true);
     const patch = isBuyer ? { buyer_chat_consent: value } : { seller_chat_consent: value };
-    const { error } = await (supabase.from("review_appeals") as any).update(patch).eq("id", row.id);
-    if (error) return toast.error(error.message);
+    const { data, error } = await (supabase.from("review_appeals") as any)
+      .update(patch)
+      .eq("id", row.id)
+      .select("id, buyer_chat_consent, seller_chat_consent, status")
+      .maybeSingle();
+    setBusy(false);
+    if (error) {
+      console.error("[AppealConsentBanner] update failed", error);
+      toast.error(error.message || "Could not update consent");
+      return;
+    }
+    if (!data) {
+      console.warn("[AppealConsentBanner] update returned no row", { patch, id: row.id });
+      toast.error("Update blocked — please retry or refresh.");
+      return;
+    }
+    setRow((prev) => (prev ? { ...prev, ...(data as AppealRow) } : prev));
     toast.success(value ? "Consent granted" : "Consent revoked");
-    load();
   };
 
   return (
@@ -67,11 +102,11 @@ export function AppealConsentBanner({ transactionId }: { transactionId: string |
         </div>
         <div className="shrink-0">
           {myConsent ? (
-            <Button size="sm" variant="outline" onClick={() => toggle(false)} className="gap-1">
+            <Button size="sm" variant="outline" disabled={busy} onClick={() => toggle(false)} className="gap-1">
               <X className="h-3.5 w-3.5" /> Revoke
             </Button>
           ) : (
-            <Button size="sm" onClick={() => toggle(true)} className="gap-1">
+            <Button size="sm" disabled={busy} onClick={() => toggle(true)} className="gap-1">
               <Check className="h-3.5 w-3.5" /> Grant consent
             </Button>
           )}
