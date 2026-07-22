@@ -14,12 +14,16 @@ export type Message = {
   id: string;
   thread_id: string;
   sender_id: string | null;
-  body: string;
+  body: string | null;
   kind: "text" | "system" | "proposal" | "completion_request";
   meta: Record<string, unknown>;
   read_at: string | null;
   image_url: string | null;
   created_at: string;
+  reply_to_message_id: string | null;
+  is_edited: boolean;
+  is_unsent: boolean;
+  edited_at: string | null;
 };
 
 export function pairIds(a: string, b: string): [string, string] {
