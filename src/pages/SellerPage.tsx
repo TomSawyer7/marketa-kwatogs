@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { AppShell } from "@/components/layout/AppShell";
 import { useMarketa } from "@/store/marketa";
@@ -12,6 +12,8 @@ import { RatingsSummary } from "@/components/reviews/RatingsSummary";
 import { useSellerTxStats } from "@/hooks/use-seller-tx-stats";
 import { useAuth } from "@/hooks/use-auth";
 import { getOrCreateThread } from "@/lib/inbox";
+import { supabase } from "@/integrations/supabase/client";
+import type { Seller } from "@/lib/types";
 import { Bookmark, MapPin, MessageCircle, Share2, Star, Store } from "lucide-react";
 import { toast } from "sonner";
 
@@ -20,11 +22,42 @@ const SellerPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { getSeller, listings, isSaved, toggleSave } = useMarketa();
-  const seller = id ? getSeller(id) : undefined;
+  const storeSeller = id ? getSeller(id) : undefined;
+  const [fetchedSeller, setFetchedSeller] = useState<Seller | null>(null);
+  const [loading, setLoading] = useState(false);
+  const seller = storeSeller ?? fetchedSeller ?? undefined;
   const rating = useUserRating(seller?.id);
   const { successfulCount } = useSellerTxStats(seller?.id);
   const [bookmarked, setBookmarked] = useState(false);
   const [starting, setStarting] = useState(false);
+
+  useEffect(() => {
+    if (!id || storeSeller) { setFetchedSeller(null); return; }
+    let cancelled = false;
+    setLoading(true);
+    (async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("id, name, avatar_url, location, bio, created_at")
+        .eq("id", id)
+        .maybeSingle();
+      if (cancelled) return;
+      if (data) {
+        setFetchedSeller({
+          id: data.id,
+          name: data.name ?? "Unnamed",
+          avatar: data.avatar_url ?? "",
+          location: data.location ?? "",
+          bio: data.bio ?? undefined,
+          joinedAt: data.created_at ? new Date(data.created_at).getTime() : Date.now(),
+        });
+      } else {
+        setFetchedSeller(null);
+      }
+      setLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [id, storeSeller]);
 
   const startChat = async () => {
     if (!user) { navigate("/auth"); return; }
@@ -42,8 +75,10 @@ const SellerPage = () => {
     return (
       <AppShell>
         <div className="px-6 py-16 text-center">
-          <h2 className="text-xl font-semibold">Seller not found</h2>
-          <Button asChild className="mt-4"><Link to="/">Back to Marketplace</Link></Button>
+          <h2 className="text-xl font-semibold">{loading ? "Loading…" : "Seller not found"}</h2>
+          {!loading && (
+            <Button asChild className="mt-4"><Link to="/">Back to Marketplace</Link></Button>
+          )}
         </div>
       </AppShell>
     );
