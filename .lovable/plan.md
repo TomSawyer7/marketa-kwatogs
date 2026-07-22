@@ -1,52 +1,64 @@
-## Messenger-style chat: reply, edit, unsend, image removal
+## Chat & Inbox UI Refactor — Header, Stepper, Proposals, Profile Peek
 
-Add Messenger-style message actions on top of the existing split-view inbox. Keep the current dedup, listing banner, search, and transaction hub — only extend messaging behavior.
+Scope is presentation-layer polish on top of the existing `threads` / `messages` / `transactions` tables. No schema changes needed: our current `transactions.status` (`proposed` → `agreed` → `seller_completed` → `completed`) already maps to the three stepper stages, and proposals live as `messages.kind = 'proposal'` linked to a `transactions` row. I'll keep that model rather than introducing new `conversations` / `proposals` tables.
 
-### 1. Database migration
+### 1. Chat header — cleaner + clickable profile
 
-Alter `public.messages`:
-- Add `reply_to_message_id uuid null references public.messages(id) on delete set null`
-- Add `is_edited boolean not null default false`
-- Add `is_unsent boolean not null default false`
-- Add `edited_at timestamptz null`
-- Make `body` nullable (allow image-only messages; keep existing rows valid)
-- Index on `reply_to_message_id`
+`src/components/inbox/ChatPane.tsx`
+- Slim the header to one row: avatar + name + presence dot + a right-side "kebab" menu (report / mute placeholder).
+- Wrap avatar and name in a button that opens a new `ProfilePeekDialog` instead of navigating away. Long-press / kebab still exposes "Open full profile" → `/seller/:id`.
+- Remove the current busy `Link` styling; use `hover:underline` on name only.
 
-RLS updates on `messages`:
-- UPDATE policy: sender can update own message when `is_unsent = false`; allowed column changes limited to `body`, `image_url`, `is_edited`, `edited_at`, `is_unsent` via a trigger that rejects edits to `thread_id`, `sender_id`, `created_at`, `kind`, `reply_to_message_id` (reply target is immutable after send)
-- Keep SELECT/INSERT policies unchanged
-- No hard DELETE from client — "unsend" is a soft flag
+New: `src/components/inbox/ProfilePeekDialog.tsx` (shadcn `Dialog`, `Sheet` on mobile)
+- Loads from `profiles` + `verified_users` + `reviews` aggregate + user's active `listings` (limit 6).
+- Sections: avatar/name/joined date/verified badge → rating summary (reuse `RatingsSummary` compact variant) → active listings grid (reuse `ListingCard` small).
+- Footer: "View full profile" link to `/seller/:id`, "Message" (closes dialog since we're already in the thread).
 
-Trigger: on UPDATE, if `is_unsent` transitions to true, clear `body` to null and `image_url` to null (server-side scrub) and set `edited_at = now()`. If `body` changes and not unsend, set `is_edited = true`, `edited_at = now()`.
+### 2. Transaction stepper + proposal bar (fix visual clutter)
 
-Storage: when unsending or removing an image, client also deletes the object from private `chat-attachments` bucket (path stored in `image_url`). Existing bucket policies already allow sender delete; verify and add a policy if missing.
+Refactor `src/components/inbox/TransactionHub.tsx` into a compact two-part strip directly under the header:
 
-### 2. Frontend components
+```text
+┌─────────────────────────────────────────────────────────────┐
+│  ● In Discussion ──── ○ Marked Done ──── ○ Completed        │
+├─────────────────────────────────────────────────────────────┤
+│  [contextual action row — one primary CTA + secondary]      │
+└─────────────────────────────────────────────────────────────┘
+```
 
-New/updated files:
-- `src/components/inbox/MessageBubble.tsx` — add hover/long-press action menu (shadcn `DropdownMenu`), render quoted reply block when `reply_to_message_id` present, render "Message unsent" muted style when `is_unsent`, `(edited)` suffix when `is_edited`. Actions: Reply, Edit (own text only), Unsend, Remove image (own, when image present).
-- `src/components/inbox/Composer.tsx` — add reply/edit banner above input with cancel; support edit mode (submit updates existing row instead of insert); keep existing image preview.
-- `src/components/inbox/ChatPane.tsx` — hold `replyTo` and `editing` state, pass handlers to bubble + composer, resolve quoted message previews from `chat.messages`.
-- `src/hooks/use-thread.ts` — new actions: `editMessage(id, body)`, `unsendMessage(id)`, `removeImage(id)`; extend `send`/`sendImage` to accept optional `replyToId`; realtime UPDATE handler already merges by id (works for edit/unsend).
-- `src/lib/inbox.ts` — extend `Message` type with `reply_to_message_id`, `is_edited`, `is_unsent`, `edited_at`; allow `body: string | null`.
+- **Stepper**: replace the current pill row with a thin connected stepper (dot + label + hairline connector). Active step tinted `primary`, done steps filled, pending steps muted. Collapses to icons-only under 380px.
+- **Action row** — exactly one primary button per state, no floating extras:
+  - No tx yet → `+ Create Proposal` (primary).
+  - Tx `proposed`/`agreed`, viewer = seller → `Mark as Done` (primary) + subtle "Edit proposal" text button.
+  - Tx `proposed`/`agreed`, viewer = buyer → muted status text "Waiting for seller to mark as done".
+  - Tx `seller_completed`, viewer = buyer → `Confirm & Rate Seller` (primary; confirms + opens review dialog).
+  - Tx `seller_completed`, viewer = seller → muted "Waiting for buyer confirmation".
+  - Tx `completed` → `Write a Review` if `canRate`, else "Transaction completed" muted line.
 
-### 3. UX details
+New: `ProposalCardBanner` (rendered inline in the action row when there's a pending proposal message and `tx.status IN ('proposed','agreed')`)
+- Compact card: listing thumb + title + proposed price + `Accept` / `Decline` / `Counter` (counter reopens `ProposalDialog` prefilled).
+- Accept → update `transactions.status` to `agreed`. Decline → set to `discussion` + system message. Counter → new proposal message + updated tx amount.
 
-- Hover on desktop reveals a compact icon row (Reply, More…); More opens dropdown with Edit/Unsend/Remove image scoped by ownership + content.
-- Long-press on mobile opens same dropdown.
-- Quoted reply block shows sender name + 1-line snippet, clickable to scroll to original.
-- Edit is text-only; images cannot be swapped (use Remove image + resend instead).
-- Unsend confirms via shadcn `AlertDialog`.
-- Profile navigation via avatar/name already routes to `/seller/:id` — keep as-is (out of scope for this plan unless user wants modal).
+### 3. Sidebar row — profile peek + dedup polish
 
-### 4. Out of scope
+`src/pages/Inbox.tsx` (`ThreadItem`)
+- Clicking the avatar (not the row) opens the same `ProfilePeekDialog`. Row click still opens the thread.
+- Dedup is already enforced at the DB level via the unique index on `(user_a, user_b, listing_id)`, so no schema work; just verify `useInbox` doesn't render stale duplicates after the earlier merge migration.
 
-- Public profile modal (already routes to seller page)
-- Changing dedup, search, or transaction hub logic
-- Message reactions, forwarding, or read receipts beyond current
+### 4. Preserved from prior work
+- Messenger hover actions (reply/edit/unsend/remove image) in `MessageBubble` stay untouched.
+- `chat-attachments` signed URLs stay untouched.
 
-### Technical notes
+### Files touched
 
-- Reply target immutability enforced via trigger to avoid RLS column-check complexity.
-- Image deletion best-effort: delete storage object first, then null `image_url`; ignore storage 404s.
-- Types file `src/integrations/supabase/types.ts` regenerates after migration approval; frontend edits land after that.
+- edit `src/components/inbox/ChatPane.tsx` — slim header, wire profile peek
+- edit `src/components/inbox/TransactionHub.tsx` — new stepper + single-CTA action row
+- new `src/components/inbox/ProfilePeekDialog.tsx`
+- new `src/components/inbox/ProposalCardBanner.tsx`
+- edit `src/components/inbox/ProposalDialog.tsx` — support counter/prefill
+- edit `src/pages/Inbox.tsx` — avatar-click opens peek
+- minor: `src/components/reviews/RatingsSummary.tsx` — add `compact` prop if not present
+
+### Out of scope (call out explicitly)
+- No new `conversations` / `proposals` tables — existing `threads` + `transactions` + `messages(kind='proposal')` already model this and are wired to RLS, realtime, and the completion state machine. Adding parallel tables would fork state.
+- No changes to review eligibility rules or completion triggers.

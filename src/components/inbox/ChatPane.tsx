@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, MessageCircle } from "lucide-react";
+import { ArrowLeft, MessageCircle, MoreHorizontal, UserRound } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useThread } from "@/hooks/use-thread";
 import { useThreadTransaction } from "@/hooks/use-thread-transaction";
@@ -10,10 +10,14 @@ import { MessageBubble } from "@/components/inbox/MessageBubble";
 import { TransactionHub } from "@/components/inbox/TransactionHub";
 import { Composer } from "@/components/inbox/Composer";
 import { ListingContextBar, type ListingContext } from "@/components/inbox/ListingContextBar";
+import { ProfilePeekDialog } from "@/components/inbox/ProfilePeekDialog";
 import { ReviewForm } from "@/components/reviews/ReviewForm";
 import { useReviewEligibility } from "@/hooks/use-review-eligibility";
 import { EmptyState } from "@/components/marketa/EmptyState";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type Props = {
   threadId: string | null;
@@ -30,6 +34,7 @@ export function ChatPane({ threadId, onBack, showBack }: Props) {
   const [listing, setListing] = useState<ListingContext | null>(null);
   const [replyTo, setReplyTo] = useState<import("@/lib/inbox").Message | null>(null);
   const [editing, setEditing] = useState<import("@/lib/inbox").Message | null>(null);
+  const [peekOpen, setPeekOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const eligibility = useReviewEligibility(chat.otherId ?? undefined);
@@ -93,7 +98,11 @@ export function ChatPane({ threadId, onBack, showBack }: Props) {
             <ArrowLeft className="h-4 w-4" />
           </Button>
         )}
-        <Link to={`/seller/${chat.otherProfile.id}`} className="flex items-center gap-3 min-w-0 flex-1">
+        <button
+          type="button"
+          onClick={() => setPeekOpen(true)}
+          className="flex items-center gap-3 min-w-0 flex-1 text-left rounded-lg -mx-1 px-1 py-0.5 hover:bg-muted/60 transition"
+        >
           <div className="relative">
             <Avatar className="h-10 w-10">
               <AvatarImage src={chat.otherProfile.avatar_url ?? undefined} alt={chat.otherProfile.name} />
@@ -105,12 +114,27 @@ export function ChatPane({ threadId, onBack, showBack }: Props) {
             />
           </div>
           <div className="min-w-0">
-            <div className="font-semibold truncate">{chat.otherProfile.name ?? "Unnamed"}</div>
+            <div className="font-semibold truncate hover:underline">{chat.otherProfile.name ?? "Unnamed"}</div>
             <div className="text-[11px] text-muted-foreground">
               {chat.typing ? "typing…" : chat.online ? "Online" : "Offline"}
             </div>
           </div>
-        </Link>
+        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" aria-label="More">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => setPeekOpen(true)}>
+              <UserRound className="h-4 w-4 mr-2" /> Quick profile
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link to={`/seller/${chat.otherProfile.id}`}>Open full profile</Link>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {listing && <ListingContextBar listing={listing} txStatus={tx?.status ?? null} />}
@@ -184,6 +208,8 @@ export function ChatPane({ threadId, onBack, showBack }: Props) {
           onSubmitted={() => setReviewOpen(false)}
         />
       )}
+
+      <ProfilePeekDialog open={peekOpen} onOpenChange={setPeekOpen} userId={chat.otherId} />
     </div>
   );
 }
