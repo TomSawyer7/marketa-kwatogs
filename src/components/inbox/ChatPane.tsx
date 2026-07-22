@@ -139,6 +139,8 @@ export function ChatPane({ threadId, onBack, showBack }: Props) {
       </div>
 
       {listing && <ListingContextBar listing={listing} txStatus={tx?.status ?? null} />}
+      <AppealConsentBanner transactionId={tx?.id ?? null} />
+
 
       <TransactionHub
         threadId={chat.thread.id}
