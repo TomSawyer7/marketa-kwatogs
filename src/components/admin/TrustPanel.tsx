@@ -8,7 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { formatRelative } from "@/lib/format";
 import { RatingStars } from "@/components/reviews/RatingStars";
-import { ShieldAlert } from "lucide-react";
+import { ShieldAlert, Eye } from "lucide-react";
+import { AppealChatViewer } from "@/components/admin/AppealChatViewer";
 
 type Report = { id: string; review_id: string; reporter_id: string; reason: string; status: string; created_at: string;
   reviews?: { id: string; rating: number; comment: string | null; reviewee_id: string } | null };
