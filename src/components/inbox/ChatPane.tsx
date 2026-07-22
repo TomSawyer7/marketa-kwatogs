@@ -98,7 +98,11 @@ export function ChatPane({ threadId, onBack, showBack }: Props) {
             <ArrowLeft className="h-4 w-4" />
           </Button>
         )}
-        <Link to={`/seller/${chat.otherProfile.id}`} className="flex items-center gap-3 min-w-0 flex-1">
+        <button
+          type="button"
+          onClick={() => setPeekOpen(true)}
+          className="flex items-center gap-3 min-w-0 flex-1 text-left rounded-lg -mx-1 px-1 py-0.5 hover:bg-muted/60 transition"
+        >
           <div className="relative">
             <Avatar className="h-10 w-10">
               <AvatarImage src={chat.otherProfile.avatar_url ?? undefined} alt={chat.otherProfile.name} />
@@ -110,12 +114,27 @@ export function ChatPane({ threadId, onBack, showBack }: Props) {
             />
           </div>
           <div className="min-w-0">
-            <div className="font-semibold truncate">{chat.otherProfile.name ?? "Unnamed"}</div>
+            <div className="font-semibold truncate hover:underline">{chat.otherProfile.name ?? "Unnamed"}</div>
             <div className="text-[11px] text-muted-foreground">
               {chat.typing ? "typing…" : chat.online ? "Online" : "Offline"}
             </div>
           </div>
-        </Link>
+        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" aria-label="More">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => setPeekOpen(true)}>
+              <UserRound className="h-4 w-4 mr-2" /> Quick profile
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link to={`/seller/${chat.otherProfile.id}`}>Open full profile</Link>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {listing && <ListingContextBar listing={listing} txStatus={tx?.status ?? null} />}
