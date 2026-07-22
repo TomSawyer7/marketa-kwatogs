@@ -26,8 +26,6 @@ export function TrustPanel() {
   const [appeals, setAppeals] = useState<Appeal[]>([]);
   const [restricted, setRestricted] = useState<Status[]>([]);
   const [reviewAppeals, setReviewAppeals] = useState<ReviewAppeal[]>([]);
-  const [viewerAppeal, setViewerAppeal] = useState<ReviewAppeal | null>(null);
-  const [resolveAppealId, setResolveAppealId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const [r, a, s, ra] = await Promise.all([
