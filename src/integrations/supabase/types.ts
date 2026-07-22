@@ -121,39 +121,58 @@ export type Database = {
       }
       messages: {
         Row: {
-          body: string
+          body: string | null
           created_at: string
+          edited_at: string | null
           id: string
           image_url: string | null
+          is_edited: boolean
+          is_unsent: boolean
           kind: string
           meta: Json
           read_at: string | null
+          reply_to_message_id: string | null
           sender_id: string | null
           thread_id: string
         }
         Insert: {
-          body?: string
+          body?: string | null
           created_at?: string
+          edited_at?: string | null
           id?: string
           image_url?: string | null
+          is_edited?: boolean
+          is_unsent?: boolean
           kind?: string
           meta?: Json
           read_at?: string | null
+          reply_to_message_id?: string | null
           sender_id?: string | null
           thread_id: string
         }
         Update: {
-          body?: string
+          body?: string | null
           created_at?: string
+          edited_at?: string | null
           id?: string
           image_url?: string | null
+          is_edited?: boolean
+          is_unsent?: boolean
           kind?: string
           meta?: Json
           read_at?: string | null
+          reply_to_message_id?: string | null
           sender_id?: string | null
           thread_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "messages_reply_to_message_id_fkey"
+            columns: ["reply_to_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "messages_thread_id_fkey"
             columns: ["thread_id"]
