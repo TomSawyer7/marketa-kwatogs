@@ -12,6 +12,7 @@ export type ChatState = {
   typing: boolean;
   online: boolean;
   send: (body: string) => Promise<void>;
+  sendImage: (file: File, caption?: string) => Promise<void>;
   sendTyping: () => void;
 };
 
@@ -140,6 +141,29 @@ export function useThread(threadId: string | undefined): ChatState {
     [threadId, user],
   );
 
+  const sendImage = useCallback(
+    async (file: File, caption?: string) => {
+      if (!threadId || !user) return;
+      if (!file.type.startsWith("image/")) throw new Error("Only image files are supported.");
+      if (file.size > 5 * 1024 * 1024) throw new Error("Image must be under 5 MB.");
+      const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+      const path = `${threadId}/${crypto.randomUUID()}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from("chat-attachments")
+        .upload(path, file, { contentType: file.type, upsert: false });
+      if (upErr) throw upErr;
+      const { error } = await supabase.from("messages").insert({
+        thread_id: threadId,
+        sender_id: user.id,
+        body: caption?.trim() ?? "",
+        kind: "text",
+        image_url: path,
+      });
+      if (error) throw error;
+    },
+    [threadId, user],
+  );
+
   const sendTyping = useCallback(() => {
     if (!channelRef.current || !user) return;
     channelRef.current.send({ type: "broadcast", event: "typing", payload: { userId: user.id } });
@@ -154,6 +178,7 @@ export function useThread(threadId: string | undefined): ChatState {
     typing,
     online,
     send,
+    sendImage,
     sendTyping,
   };
 }
