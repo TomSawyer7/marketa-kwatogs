@@ -18,6 +18,7 @@ export type Message = {
   kind: "text" | "system" | "proposal" | "completion_request";
   meta: Record<string, unknown>;
   read_at: string | null;
+  image_url: string | null;
   created_at: string;
 };
 
@@ -31,22 +32,32 @@ export async function getOrCreateThread(
   listingId?: string | null,
 ): Promise<string> {
   const [ua, ub] = pairIds(meId, otherId);
-  const q = supabase
-    .from("threads")
-    .select("id")
-    .eq("user_a", ua)
-    .eq("user_b", ub);
-  const { data: existing } = listingId
-    ? await q.eq("listing_id", listingId).maybeSingle()
-    : await q.is("listing_id", null).maybeSingle();
-  if (existing?.id) return existing.id;
+
+  const findExisting = async () => {
+    const q = supabase.from("threads").select("id").eq("user_a", ua).eq("user_b", ub);
+    const { data } = listingId
+      ? await q.eq("listing_id", listingId).maybeSingle()
+      : await q.is("listing_id", null).maybeSingle();
+    return data?.id ?? null;
+  };
+
+  const existing = await findExisting();
+  if (existing) return existing;
 
   const { data, error } = await supabase
     .from("threads")
     .insert({ user_a: ua, user_b: ub, listing_id: listingId ?? null })
     .select("id")
     .single();
-  if (error) throw error;
+
+  if (error) {
+    // Race: another tab created it — pick up the existing row via the unique index.
+    if ((error as { code?: string }).code === "23505") {
+      const again = await findExisting();
+      if (again) return again;
+    }
+    throw error;
+  }
   return data.id;
 }
 
