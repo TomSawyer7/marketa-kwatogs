@@ -8,7 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { formatRelative } from "@/lib/format";
 import { RatingStars } from "@/components/reviews/RatingStars";
-import { ShieldAlert } from "lucide-react";
+import { ShieldAlert, Eye } from "lucide-react";
+import { AppealChatViewer } from "@/components/admin/AppealChatViewer";
 
 type Report = { id: string; review_id: string; reporter_id: string; reason: string; status: string; created_at: string;
   reviews?: { id: string; rating: number; comment: string | null; reviewee_id: string } | null };
@@ -28,6 +29,7 @@ export function TrustPanel() {
   const [appeals, setAppeals] = useState<Appeal[]>([]);
   const [restricted, setRestricted] = useState<Status[]>([]);
   const [reviewAppeals, setReviewAppeals] = useState<ReviewAppeal[]>([]);
+  const [viewerAppeal, setViewerAppeal] = useState<ReviewAppeal | null>(null);
 
   const load = useCallback(async () => {
     const [r, a, s, ra] = await Promise.all([
@@ -118,7 +120,18 @@ export function TrustPanel() {
                   )}
                   {a.admin_notes && <p className="text-xs text-muted-foreground mt-2">Admin note: {a.admin_notes}</p>}
                   {consented && active && (
-                    <p className="text-xs text-emerald-600 mt-2">Chat audit unlocked — you have read access while this appeal is active.</p>
+                    <div className="mt-2">
+                      <Button size="sm" variant="outline" className="gap-1" onClick={() => setViewerAppeal(a)}>
+                        <Eye className="h-3.5 w-3.5" /> View chat audit
+                      </Button>
+                      <p className="text-[11px] text-emerald-600 mt-1">Chat audit unlocked while this appeal is under review.</p>
+                    </div>
+                  )}
+                  {consented && !active && (
+                    <p className="text-xs text-muted-foreground mt-2">Audit window closed (appeal resolved).</p>
+                  )}
+                  {!consented && active && (
+                    <p className="text-xs text-muted-foreground mt-2">Awaiting consent from both parties to unlock chat audit.</p>
                   )}
                 </div>
                 {active && (
@@ -221,6 +234,13 @@ export function TrustPanel() {
           </div>
         ))}
       </TabsContent>
+      <AppealChatViewer
+        open={!!viewerAppeal}
+        onOpenChange={(v) => { if (!v) setViewerAppeal(null); }}
+        transactionId={viewerAppeal?.transaction_id ?? null}
+        appealStatus={viewerAppeal?.status ?? ""}
+        bothConsented={!!(viewerAppeal?.buyer_chat_consent && viewerAppeal?.seller_chat_consent)}
+      />
     </Tabs>
   );
 }
