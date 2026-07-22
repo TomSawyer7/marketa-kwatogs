@@ -101,30 +101,37 @@ export function UserReviewList({ userId }: { userId: string }) {
   const { user } = useAuth();
   const [rows, setRows] = useState<Row[] | null>(null);
   const [reportOpen, setReportOpen] = useState<string | null>(null);
+  const [appealOpen, setAppealOpen] = useState<string | null>(null);
+  const [appealedIds, setAppealedIds] = useState<Set<string>>(new Set());
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [sort, setSort] = useState<Sort>("recent");
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const { data, error } = await supabase
-        .from("reviews")
-        .select("id, rating, tags, comment, role, reviewer_id, created_at")
-        .eq("reviewee_id", userId)
-        .order("created_at", { ascending: false });
-      if (cancelled) return;
-      if (error) { setRows([]); return; }
-      const reviewerIds = Array.from(new Set((data ?? []).map((d) => d.reviewer_id)));
-      const { data: profiles } = reviewerIds.length
-        ? await supabase.from("profiles").select("id, name").in("id", reviewerIds)
-        : { data: [] as { id: string; name: string | null }[] };
-      const nameMap = new Map((profiles ?? []).map((p) => [p.id, p.name]));
-      if (cancelled) return;
-      setRows((data ?? []).map((r) => ({ ...r, reviewer_name: nameMap.get(r.reviewer_id) ?? null })) as Row[]);
-    })();
-    return () => { cancelled = true; };
-  }, [userId]);
+  const loadRows = async () => {
+    const { data, error } = await (supabase
+      .from("reviews") as any)
+      .select("id, rating, tags, comment, role, reviewer_id, reviewee_id, created_at, status")
+      .eq("reviewee_id", userId)
+      .neq("status", "removed_entirely")
+      .order("created_at", { ascending: false });
+    if (error) { setRows([]); return; }
+    const reviewerIds = Array.from(new Set((data ?? []).map((d: any) => d.reviewer_id)));
+    const { data: profiles } = reviewerIds.length
+      ? await supabase.from("profiles").select("id, name").in("id", reviewerIds as string[])
+      : { data: [] as { id: string; name: string | null }[] };
+    const nameMap = new Map((profiles ?? []).map((p) => [p.id, p.name]));
+    setRows((data ?? []).map((r: any) => ({ ...r, reviewer_name: nameMap.get(r.reviewer_id) ?? null, status: r.status ?? "active" })) as Row[]);
+
+    if (user && user.id === userId && data && data.length) {
+      const ids = (data as any[]).map((d) => d.id);
+      const { data: appeals } = await (supabase.from("review_appeals") as any)
+        .select("review_id")
+        .in("review_id", ids);
+      setAppealedIds(new Set(((appeals ?? []) as any[]).map((a) => a.review_id)));
+    }
+  };
+
+  useEffect(() => { loadRows(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [userId, user?.id]);
 
   const sorted = useMemo(() => {
     if (!rows) return rows;
