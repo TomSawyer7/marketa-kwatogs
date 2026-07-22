@@ -30,6 +30,7 @@ const Inbox = () => {
   const [tab, setTab] = useState<"all" | "unread" | "active">("all");
   const [people, setPeople] = useState<Person[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [peekId, setPeekId] = useState<string | null>(null);
 
   const activeId = activeIdParam ?? selectedId;
 
