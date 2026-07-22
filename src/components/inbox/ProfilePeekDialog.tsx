@@ -34,12 +34,18 @@ export function ProfilePeekDialog({
   onOpenChange: (v: boolean) => void;
   userId: string | null;
 }) {
+  const navigate = useNavigate();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [verified, setVerified] = useState(false);
   const [avg, setAvg] = useState<number | null>(null);
   const [count, setCount] = useState(0);
   const [listings, setListings] = useState<MiniListing[]>([]);
   const [loading, setLoading] = useState(false);
+
+  const goTo = (path: string) => {
+    onOpenChange(false);
+    setTimeout(() => navigate(path), 0);
+  };
 
   useEffect(() => {
     if (!open || !userId) return;
