@@ -1,51 +1,62 @@
 ## Goal
-Turn the review-appeal admin flow into an explicit decision with three outcomes, apply the correct DB effect on the review, and notify both buyer and seller in real time.
+Redesign the Trust & Safety "Review appeals" tab into a dedicated **Appeal Management Workspace** with a KPI header and split-panel queue/detail layout. All other tabs (Reports, Account appeals, Restricted) stay as-is.
 
-Note on naming: existing schema uses `reviews.status IN ('active','removed_review_only','removed_entirely')` and `review_appeals.resolution_kind IN ('removed_review_only','removed_entirely')`. Plan keeps these names (mapping the prompt's `removed_review_text_only` → existing `removed_review_only`) to avoid a breaking rename across code and existing rows.
+## 1. KPI header (top of review-appeals tab)
+Four compact metric cards using existing card/border tokens:
+- **Active Appeals** — count where status ∉ (Approved, Rejected, Resolved)
+- **Waiting for Consent** — status = "Waiting for Consent" OR (Pending with at least one missing consent)
+- **Under Review** — status = "Under Review" or "Waiting for Additional Evidence"
+- **Resolved Today** — terminal status with `resolved_at` (fallback: updated within last 24h) on today's date
 
-## 1. Database migration
+Each card: label, big number, small icon (ShieldAlert, Clock, Gavel, CheckCircle2), matching the Marketa admin visual language already used by `StatsHeader`.
 
-**Notifications table**
-- `public.notifications`: `id`, `user_id` (fk `profiles.id`), `title`, `message`, `type` (default `'appeal_update'`), `is_read` (default false), `meta jsonb` (appeal_id, review_id, decision), `created_at`.
-- GRANTs: `SELECT, UPDATE` to `authenticated` (for own rows / mark-read); `ALL` to `service_role`. No anon.
-- RLS: users can `SELECT` and `UPDATE` (only `is_read`) their own rows; inserts happen via security-definer trigger only.
-- `ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;` and `REPLICA IDENTITY FULL`.
+## 2. Split-panel layout (replaces current list of full-width cards)
+Grid `md:grid-cols-[380px_1fr]`, height-bounded like the verifications tab.
 
-**Resolution trigger enhancement**
-Extend the existing `review_appeals_apply_resolution` trigger (or add a second AFTER trigger) so that when `status` transitions to `Approved`/`Rejected`/`Resolved`:
-- If `Approved` + `resolution_kind = 'removed_review_only'` → `UPDATE reviews SET status='removed_review_only', comment=NULL`.
-- If `Approved` + `resolution_kind = 'removed_entirely'` → `UPDATE reviews SET status='removed_entirely'` (already filtered from lists and aggregate).
-- If `Rejected` → `UPDATE reviews SET status='active'` (already done).
-- Recalc aggregate via existing `recalc_account_status` path (already fires from `trg_reviews_recalc`); the review UPDATE will trigger it.
-- Insert two `notifications` rows (buyer_id, seller_id) with title/message derived from decision + `admin_notes`, and `meta = { appeal_id, review_id, decision, resolution_kind }`.
+**Left — Appeals Queue**
+- Filter tabs: `All` · `Waiting for Consent` · `Under Review` · `Resolved` (client-side filter over already-fetched `reviewAppeals`).
+- Compact row per appeal:
+  - Seller name → Buyer name (fetched from `profiles`)
+  - Listing title + price (join via `transactions.listing_id → listings`)
+  - Star chip for disputed rating
+  - Status badge + relative time
+  - Consent pips: `B ✅/❌  S ✅/❌`
+- Selected row highlighted; empty state when filter yields nothing.
 
-## 2. Admin UI — explicit resolution picker
+**Right — Appeal Detail Workspace**
+Sections stacked, each in a bordered card:
+1. **Disputed review** — buyer name, stars, comment, timestamp.
+2. **Seller's appeal** — reason text + evidence gallery (thumbnails from `appeal-evidence` bucket via `useSignedUrl`; click opens a `Dialog` lightbox with prev/next).
+3. **Privacy & Chat Audit box**
+   - Locked: shield icon, `Chat Locked — Waiting for Dual Consent` + per-party status chips.
+   - Unlocked (both consented AND status ∈ Under Review / Waiting for Additional Evidence): green "Temporary Chat Access Granted" banner + inline embed (reuse `AppealChatViewer` transcript rendering extracted into a shared `AppealChatTranscript` component, or keep the "Open transcript" button as-is).
+   - Post-resolution: neutral state "Audit window closed".
+4. **Admin Resolution panel** (only when appeal is active)
+   - `RadioGroup` with the three outcomes matching existing `ResolveAppealDialog` payload mapping (`removed_entirely`, `removed_review_only`, `rejected`).
+   - `Textarea` for admin notes (min 10 chars, matches current validation).
+   - "Submit Decision & Notify Both Parties" button → same update on `review_appeals` (status + resolution_kind + admin_notes). Existing DB trigger handles review status, aggregate recompute, and notification inserts to both parties.
+   - Also expose the intermediate-status `Select` (Pending / Waiting for Consent / Under Review / Waiting for Additional Evidence) as a small "Move to…" control above the radio group.
 
-`src/components/admin/TrustPanel.tsx` (review-appeals tab):
-- Replace the freeform status `Select` with a **Resolve appeal** dialog launched from each active appeal card. Keep the existing intermediate status controls (Pending / Waiting for Consent / Under Review / Waiting for Additional Evidence) as a separate small Select — only the terminal decision goes through the dialog.
-- New `src/components/admin/ResolveAppealDialog.tsx`:
-  - Radio group with three outcomes:
-    1. *Uphold — remove rating and review entirely* (`Approved` + `removed_entirely`)
-    2. *Uphold — remove written comment only, keep rating* (`Approved` + `removed_review_only`)
-    3. *Dismiss — review is legitimate* (`Rejected`, no `resolution_kind`)
-  - Required `admin_notes` textarea (explanation shown to both parties).
-  - Submit performs a single `update` on `review_appeals` setting `status`, `resolution_kind`, `admin_notes` — triggers handle the rest.
-- Remove the ad-hoc `prompt("Admin note")` button.
+## 3. Data fetching additions
+Extend the current `review_appeals` query to also select:
+- `reviews:review_id(id, rating, comment, created_at, reviewer_id)`
+- Join seller + buyer names via a follow-up `profiles.select("id, name, avatar_url").in("id", [...])` call
+- Listing details via `transactions.select("id, listing_id, listings(title, price)").in("id", [...transactionIds])`
 
-## 3. Notifications UI (real-time)
+All done in `TrustPanel` `load()` (or a new `useAppealsQueue` hook) — no schema changes needed.
 
-- `src/hooks/use-notifications.ts`: fetch latest 20 for `auth.uid()`, subscribe to `postgres_changes` INSERT on `notifications` filtered by `user_id`, expose `unreadCount`, `markRead(id)`, `markAllRead()`. Cleanup channel in `useEffect` return.
-- `src/components/notifications/NotificationBell.tsx`: bell icon + unread badge in `Header.tsx`; opens a `Popover` listing items (title, message, relative time, unread dot). Clicking marks read and, when `meta.review_id` exists, navigates to the relevant profile/review.
-- Toast on new incoming notification while app is open (sonner).
-
-## 4. Review list — reflect new state
-`src/components/reviews/UserReviewList.tsx` already handles `removed_review_only` (comment scrubbed) and filters `removed_entirely`. No change needed beyond confirming aggregate recomputes (existing trigger chain covers it).
+## 4. Files
+- **New**: `src/components/admin/AppealsWorkspace.tsx` — KPI row + split view + detail panel.
+- **New**: `src/components/admin/AppealDetailPanel.tsx` — disputed review + seller appeal + evidence gallery + chat audit box + resolution panel (inlines the current `ResolveAppealDialog` logic).
+- **New**: `src/components/admin/EvidenceLightbox.tsx` — full-screen evidence viewer with keyboard nav.
+- **Edit**: `src/components/admin/TrustPanel.tsx` — replace the entire `review-appeals` `TabsContent` body with `<AppealsWorkspace />`. Keep other tabs unchanged. Remove now-unused `ResolveAppealDialog` mount if it's fully absorbed into the detail panel (keep import if we still need the modal fallback — decide during build; default: absorb).
 
 ## 5. Out of scope
-- Email delivery via edge function (prompt marks it optional). Structure allows adding a `pg_net`/edge-function hook later; not built now.
-- Renaming `removed_review_only` → `removed_review_text_only` across the codebase (cosmetic, would touch multiple files and existing data).
+- No schema or trigger changes (existing notification/resolution triggers already do what's required).
+- Reports, Account appeals, and Restricted tabs untouched.
+- No changes to buyer/seller-facing appeal UI.
 
 ## Technical notes
-- All notification INSERTs happen inside the existing `SECURITY DEFINER` trigger, so RLS on `notifications` can safely block direct client inserts.
-- Realtime: enable publication + `REPLICA IDENTITY FULL` on `notifications`; subscribe with a filter `user_id=eq.<me>` so each client only receives its own rows.
-- The dialog submits status + resolution_kind + admin_notes in one update; the trigger's existing consent-revocation and review-status logic remains intact.
+- Reuse `RatingStars`, `useSignedUrl`, `formatRelative`, shadcn `Tabs`, `RadioGroup`, `Textarea`, `Badge`, `Dialog`.
+- Resolution payload stays exactly compatible with the existing DB trigger to avoid regressions in notifications and review-status transitions.
+- Split-view height mirrors verifications tab (`h-[calc(100vh-...)]`) so both admin views feel consistent.
