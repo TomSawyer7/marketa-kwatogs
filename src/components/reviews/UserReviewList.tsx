@@ -24,8 +24,10 @@ type Row = {
   comment: string | null;
   role: "buyer" | "seller";
   reviewer_id: string;
+  reviewee_id: string;
   reviewer_name: string | null;
   created_at: string;
+  status: "active" | "removed_review_only" | "removed_entirely";
 };
 
 type Sort = "recent" | "helpful" | "highest" | "lowest";
