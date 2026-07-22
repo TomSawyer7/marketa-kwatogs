@@ -3,14 +3,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { formatRelative } from "@/lib/format";
 import { RatingStars } from "@/components/reviews/RatingStars";
-import { ShieldAlert, Eye, Gavel } from "lucide-react";
-import { AppealChatViewer } from "@/components/admin/AppealChatViewer";
-import { ResolveAppealDialog } from "@/components/admin/ResolveAppealDialog";
+import { AppealsWorkspace } from "@/components/admin/AppealsWorkspace";
 
 type Report = { id: string; review_id: string; reporter_id: string; reason: string; status: string; created_at: string;
   reviews?: { id: string; rating: number; comment: string | null; reviewee_id: string } | null };
