@@ -122,11 +122,11 @@ export function ProfilePeekDialog({
               ) : (
                 <div className="grid grid-cols-3 gap-2">
                   {listings.map((l) => (
-                    <Link
+                    <button
                       key={l.id}
-                      to={`/item/${l.id}`}
-                      onClick={() => onOpenChange(false)}
-                      className="group block rounded-lg overflow-hidden bg-muted"
+                      type="button"
+                      onClick={() => goTo(`/item/${l.id}`)}
+                      className="group block rounded-lg overflow-hidden bg-muted text-left"
                     >
                       <div className="aspect-square bg-secondary overflow-hidden">
                         {l.images?.[0] && (
@@ -142,7 +142,7 @@ export function ProfilePeekDialog({
                         <div className="text-[11px] font-semibold truncate">{formatPrice(l.price)}</div>
                         <div className="text-[10px] text-muted-foreground truncate">{l.title}</div>
                       </div>
-                    </Link>
+                    </button>
                   ))}
                 </div>
               )}
