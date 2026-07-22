@@ -3,6 +3,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import type { Thread } from "@/lib/inbox";
 
+export type InboxListing = {
+  id: string;
+  title: string;
+  price: number;
+  image: string | null;
+};
+
 export type InboxRow = {
   thread: Thread;
   otherId: string;
@@ -12,6 +19,7 @@ export type InboxRow = {
   lastFromMe: boolean;
   unread: number;
   hasActiveTx: boolean;
+  listing: InboxListing | null;
 };
 
 export function useInbox() {
@@ -39,13 +47,16 @@ export function useInbox() {
         new Set(threads.map((t) => (t.user_a === user.id ? t.user_b : t.user_a))),
       );
       const threadIds = threads.map((t) => t.id);
+      const listingIds = Array.from(
+        new Set(threads.map((t) => t.listing_id).filter(Boolean) as string[]),
+      );
 
-      const [{ data: profiles }, { data: lastMsgs }, { data: unread }, { data: activeTx }] =
+      const [{ data: profiles }, { data: lastMsgs }, { data: unread }, { data: activeTx }, { data: listings }] =
         await Promise.all([
           supabase.from("profiles").select("id, name, avatar_url").in("id", otherIds),
           supabase
             .from("messages")
-            .select("thread_id, body, sender_id, created_at, kind")
+            .select("thread_id, body, sender_id, created_at, kind, image_url")
             .in("thread_id", threadIds)
             .order("created_at", { ascending: false }),
           supabase
@@ -59,13 +70,30 @@ export function useInbox() {
             .select("thread_id, status")
             .in("thread_id", threadIds)
             .in("status", ["proposed", "agreed", "pending"]),
+          listingIds.length
+            ? supabase.from("listings").select("id, title, price, images").in("id", listingIds)
+            : Promise.resolve({ data: [] as { id: string; title: string; price: number; images: string[] }[] }),
         ]);
 
       const pMap = new Map((profiles ?? []).map((p) => [p.id, p]));
-      const lastByThread = new Map<string, { body: string; sender_id: string | null; kind: string }>();
+      const lMap = new Map(
+        (listings ?? []).map((l) => [
+          l.id,
+          { id: l.id, title: l.title, price: l.price, image: l.images?.[0] ?? null } as InboxListing,
+        ]),
+      );
+      const lastByThread = new Map<
+        string,
+        { body: string; sender_id: string | null; kind: string; image_url: string | null }
+      >();
       for (const m of lastMsgs ?? []) {
         if (!lastByThread.has(m.thread_id))
-          lastByThread.set(m.thread_id, { body: m.body, sender_id: m.sender_id, kind: m.kind });
+          lastByThread.set(m.thread_id, {
+            body: m.body,
+            sender_id: m.sender_id,
+            kind: m.kind,
+            image_url: (m as { image_url: string | null }).image_url ?? null,
+          });
       }
       const unreadCount = new Map<string, number>();
       for (const u of unread ?? [])
@@ -76,19 +104,21 @@ export function useInbox() {
         const otherId = t.user_a === user.id ? t.user_b : t.user_a;
         const p = pMap.get(otherId);
         const last = lastByThread.get(t.id);
+        const preview = last
+          ? last.image_url
+            ? last.body?.trim() || "📷 Photo"
+            : last.body
+          : "No messages yet";
         return {
           thread: t as Thread,
           otherId,
           otherName: (p?.name as string) ?? "Unknown",
           otherAvatar: (p?.avatar_url as string) ?? null,
-          lastBody: last
-            ? last.kind === "system"
-              ? last.body
-              : last.body
-            : "No messages yet",
+          lastBody: preview,
           lastFromMe: last?.sender_id === user.id,
           unread: unreadCount.get(t.id) ?? 0,
           hasActiveTx: activeSet.has(t.id),
+          listing: t.listing_id ? lMap.get(t.listing_id) ?? null : null,
         };
       });
       if (!cancelled) setRows(out);
@@ -97,7 +127,6 @@ export function useInbox() {
     return () => { cancelled = true; };
   }, [user, refresh]);
 
-  // Realtime: refresh on any new message
   useEffect(() => {
     if (!user) return;
     const channel = supabase
