@@ -1,49 +1,73 @@
 
 ## Goal
-Replace the current single-step seller completion with a double handshake:
-`discussion → seller_completed → completed`. Reviews unlock only at `completed`.
+Overhaul the Inbox into a Facebook Marketplace-style split view, eliminate duplicate threads, add image attachments via a private Supabase Storage bucket, and make user avatars/names deep-link to public profiles.
 
 ## 1. Database migration
 
-- Add `'seller_completed'` as a valid `transactions.status` value (text column today — add a CHECK constraint listing allowed states, or extend the enum if one exists; verified during migration).
-- Drop the current `Seller updates transaction` UPDATE policy and replace with two scoped policies:
-  - **Seller mark-as-done**: `USING (auth.uid() = seller_id AND status IN ('discussion','agreed')) WITH CHECK (auth.uid() = seller_id AND status = 'seller_completed')`.
-  - **Buyer confirm**: `USING (auth.uid() = buyer_id AND status = 'seller_completed') WITH CHECK (auth.uid() = buyer_id AND status = 'completed')`.
-  - **Buyer dispute (revert)**: `USING (auth.uid() = buyer_id AND status = 'seller_completed') WITH CHECK (auth.uid() = buyer_id AND status = 'discussion')` — used by the "Not yet / Dispute" button.
-- Rewrite `transactions_seller_complete()` BEFORE UPDATE trigger:
-  - On transition to `seller_completed`: stamp `seller_confirmed_at = now()`.
-  - On transition to `completed` (from `seller_completed`): stamp `buyer_confirmed_at` and `confirmed_at = now()`.
-- Rewrite `transactions_post_completion_message()` AFTER UPDATE trigger to emit distinct system messages per transition, with `meta.event`:
-  - `seller_completed` → *"The seller marked this transaction as done. Waiting for the buyer to confirm."* (`meta.event='seller_completed'`, includes `transaction_id`).
-  - `completed` → *"Transaction successfully completed! You can now rate each other."* (`meta.event='completed'`).
-  - Buyer reverts back to `discussion` → *"The buyer indicated the transaction is not yet complete."* (`meta.event='buyer_disputed'`).
+Keep the existing `threads` schema. Additions only:
 
-Rating uniqueness is already enforced by the existing `reviews` unique constraint — no token table added (per prior decision).
+- Deduplication: since `threads` already stores `(user_a, user_b, listing_id)` with the pair pre-sorted by `pairIds()`, add a partial unique index so one thread exists per listing-per-pair, plus one general-DM thread per pair:
+  - `CREATE UNIQUE INDEX threads_pair_listing_unique ON threads(user_a, user_b, listing_id) WHERE listing_id IS NOT NULL;`
+  - `CREATE UNIQUE INDEX threads_pair_dm_unique ON threads(user_a, user_b) WHERE listing_id IS NULL;`
+  - Pre-clean any existing duplicate rows before adding the indexes (merge messages into the oldest thread, delete the rest).
+- `ALTER TABLE messages ADD COLUMN image_url text;` (nullable; text bubbles keep working)
+- Create private storage bucket `chat-attachments` via `supabase--storage_create_bucket` (public=false).
+- Storage RLS on `storage.objects` for bucket `chat-attachments`:
+  - INSERT: authenticated user, path prefix must be `<thread_id>/...`, and user must be `user_a` or `user_b` of that thread.
+  - SELECT: same participant check (used for signed URL generation and any direct reads).
 
-## 2. Frontend — `TransactionHub.tsx`
+## 2. Frontend refactor
 
-- Progress stepper stages become: `In Discussion` → `Seller Marked Done` → `Completed`.
-- Buttons:
-  - Seller, status ∈ {discussion, agreed}: **[ Mark as Done ]** → update to `seller_completed`.
-  - Seller, status = `seller_completed`: read-only text *"Waiting for buyer confirmation…"*.
-  - Buyer, status = `seller_completed`: no button here (handled by in-chat card, see §3).
-  - Status = `completed`: existing **[ Rate them ]** button (unchanged).
-- `canRate` gating stays tied to `status === 'completed'`.
+### Split-view layout (`src/pages/Inbox.tsx`)
+- Desktop (≥ md): two-column grid — left sidebar (chat list, ~340px) + right pane (active chat or empty state).
+- Mobile: current behavior — list on `/inbox`, tapping navigates to `/inbox/:id` full-screen.
+- Move ChatThread rendering into a shared `<ChatPane threadId>` component so both routes reuse it.
+- Route `/inbox/:id` on desktop highlights the row in the sidebar and mounts `<ChatPane>` in the right column; on mobile it renders full-screen as today.
 
-## 3. Frontend — in-chat buyer confirmation card
+### Sidebar (left column)
+- Reuse `useInbox` (already dedupes by `thread_id`). Add listing thumbnail + title lookup so each row shows a small listing-context badge when `thread.listing_id` is set.
+- Keep tabs (All / Unread / Active Transactions) and search input.
+- Real-time search: filter by other user name, listing title, and last message body. Existing "people search" stays for starting new chats.
 
-- Extend `MessageBubble.tsx` to recognize system messages with `meta.event === 'seller_completed'` and render a prominent card (bordered, primary accent) instead of the plain pill, containing:
-  - Text: *"The seller has marked this transaction as completed. Did you receive your item/service?"*
-  - Buttons **[ Confirm & Rate ]** and **[ Dispute / Not Yet ]**, shown ONLY when the viewer is the buyer AND the linked transaction is still in `seller_completed` (look up via `meta.transaction_id` — pass current tx from `ThreadView` into `MessageList`/`MessageBubble` as context, or resolve by id).
-  - **Confirm & Rate** → update `transactions.status='completed'`, then trigger the existing rate flow (`onRate`) once the update returns.
-  - **Dispute / Not Yet** → update `transactions.status='discussion'` (buyer revert policy).
-  - After the transaction leaves `seller_completed`, the buttons disappear (card becomes static system text).
-- The `completed` and `buyer_disputed` system messages render as the standard centered pill.
+### Chat pane (right column)
+- Header: avatar + name (links to `/seller/:id`), online/typing status.
+- Listing context bar: thumbnail, title, price, status pill ("Active"/"Sold"/"Completed") when `thread.listing_id` exists. Clickable → `/item/:id`.
+- Message feed: existing `MessageBubble`, extended to render `image_url` as an `<img>` inside the bubble (resolved via signed URL). Realtime subscription is already in place.
+- Composer: add a paperclip button that opens a hidden file input (accept="image/*"). On select:
+  1. Validate size (≤ 5 MB) and type.
+  2. Upload to `chat-attachments/<thread_id>/<uuid>.<ext>`.
+  3. Insert a `messages` row with `image_url = <storage path>` and empty `body` (or caption if user typed one).
+  4. On render, call `supabase.storage.from('chat-attachments').createSignedUrl(path, 3600)` and cache the resolved URL per message id.
+- Optimistic preview while uploading.
 
-## 4. Profile/reviews unlock
-No changes — already gated by `status='completed'` + existing `reviews` RLS/unique constraints.
+### Deduplication safety
+- `getOrCreateThread` in `src/lib/inbox.ts` already selects before inserting. Wrap the insert in a `try/catch`: if the new unique constraint fires (Postgres error `23505`), re-select and return the existing row. Prevents races when two tabs open a chat at once.
 
-## Technical notes
-- All state transitions happen client-side via `supabase.from('transactions').update(...)`; RLS + BEFORE trigger enforce role, source-state, and timestamps. No edge function needed.
-- Wire the current `tx` from `ThreadView` down to `MessageList` → `MessageBubble` so the confirmation card knows whether to still show its buttons after realtime status changes.
-- Files touched: 1 new migration, `src/components/inbox/TransactionHub.tsx`, `src/components/inbox/MessageBubble.tsx`, `src/components/inbox/MessageList.tsx` (prop pass-through), `src/components/inbox/ThreadView.tsx` (prop pass-through + role/tx context).
+### Profile navigation
+- Already wired via `Link to={/seller/:id}`; audit Inbox + ChatThread to ensure every avatar/name (sidebar rows too) is a link to the other user's public profile.
+
+## 3. Files touched
+
+- `supabase/migrations/*` (new migration via tool)
+- `src/lib/inbox.ts` — dedupe-safe getOrCreateThread
+- `src/hooks/use-inbox.ts` — join listing thumbnail/title/price/status
+- `src/hooks/use-thread.ts` — extend Message type with image_url
+- `src/lib/inbox.ts` types — add `image_url`
+- `src/pages/Inbox.tsx` — new split layout, listing badge on rows
+- `src/pages/ChatThread.tsx` — thin wrapper around new `<ChatPane>` (mobile route)
+- `src/components/inbox/ChatPane.tsx` — new, extracted chat surface
+- `src/components/inbox/ListingContextBar.tsx` — new
+- `src/components/inbox/Composer.tsx` — new, with attachment button
+- `src/components/inbox/MessageBubble.tsx` — render image bubbles + signed-URL hook
+- `src/hooks/use-signed-url.ts` — new, small cache for signed URLs
+
+## 4. Out of scope
+- No rename of `threads`→`conversations` (per your choice).
+- No changes to transaction/rating flow.
+- Leaked password protection (unrelated preexisting Auth warning).
+
+## 5. Verification
+- Send text + image in a thread; confirm image renders via signed URL for both participants and 403s for a non-participant.
+- Open the same listing chat from two tabs → only one thread row exists.
+- Search filters sidebar in real-time; tabs still work.
+- Desktop shows split view; mobile still routes full-screen.
