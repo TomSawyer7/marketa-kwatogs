@@ -1,31 +1,51 @@
 ## Goal
-Give admins an actual chat viewer when a review appeal has dual consent — right now `TrustPanel` only shows a "Chat audit unlocked" note without any way to read the messages.
+Turn the review-appeal admin flow into an explicit decision with three outcomes, apply the correct DB effect on the review, and notify both buyer and seller in real time.
 
-## What to add
+Note on naming: existing schema uses `reviews.status IN ('active','removed_review_only','removed_entirely')` and `review_appeals.resolution_kind IN ('removed_review_only','removed_entirely')`. Plan keeps these names (mapping the prompt's `removed_review_text_only` → existing `removed_review_only`) to avoid a breaking rename across code and existing rows.
 
-1. **New component `src/components/admin/AppealChatViewer.tsx`**
-   - Dialog opened from the appeal card.
-   - Props: `transactionId`, `appealId`, `open`, `onOpenChange`.
-   - On open, resolve the linked `thread_id` via `transactions.select("thread_id, buyer_id, seller_id").eq("id", transactionId).single()`.
-   - Fetch messages with `supabase.from("messages").select("id, sender_id, body, image_url, kind, created_at, is_unsent").eq("thread_id", threadId).order("created_at")` — RLS `admin_reads_during_active_appeal` already permits this only while both consents are true and status is `Under Review`/`Waiting for Additional Evidence`.
-   - Also fetch `profiles` (id, name, avatar_url) for buyer + seller so bubbles can be labeled.
-   - Render a read-only scrollable transcript: left/right bubbles by `sender_id`, system messages centered, timestamps, unsent messages shown as "message unsent", images as signed URLs via existing `use-signed-url` (path stored in `image_url`).
-   - Empty/loading/permission-error states. If the select returns `[]` and consent conditions aren't met, show an explanatory notice (consent required / status not in audit window).
-   - No compose input, no edit, no realtime — purely read-only snapshot with a "Refresh" button.
+## 1. Database migration
 
-2. **`src/components/admin/TrustPanel.tsx` changes**
-   - Add local state `viewerAppeal: ReviewAppeal | null`.
-   - In each review-appeal card, when `consented && active`, replace the green text with a `Button` "View chat audit" that sets `viewerAppeal = a`.
-   - When `consented` but `!active`, show disabled "Audit window closed" text.
-   - When not consented, keep current consent-status badges and show muted "Awaiting consent from both parties".
-   - Render `<AppealChatViewer open={!!viewerAppeal} onOpenChange={…} transactionId={viewerAppeal?.transaction_id} appealId={viewerAppeal?.id} />` at the bottom.
-   - Note: moving status to `Under Review` is what unlocks the RLS clause, so keep the existing status Select — the viewer button just becomes usable once status is in the audit window.
+**Notifications table**
+- `public.notifications`: `id`, `user_id` (fk `profiles.id`), `title`, `message`, `type` (default `'appeal_update'`), `is_read` (default false), `meta jsonb` (appeal_id, review_id, decision), `created_at`.
+- GRANTs: `SELECT, UPDATE` to `authenticated` (for own rows / mark-read); `ALL` to `service_role`. No anon.
+- RLS: users can `SELECT` and `UPDATE` (only `is_read`) their own rows; inserts happen via security-definer trigger only.
+- `ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;` and `REPLICA IDENTITY FULL`.
 
-## Out of scope
-- No schema or RLS changes — the `admin_reads_during_active_appeal` policy on `messages` already handles access. This is a frontend-only fix that surfaces the messages the admin is already permitted to read.
-- No realtime subscription in the audit viewer (snapshot + refresh is sufficient for moderation).
+**Resolution trigger enhancement**
+Extend the existing `review_appeals_apply_resolution` trigger (or add a second AFTER trigger) so that when `status` transitions to `Approved`/`Rejected`/`Resolved`:
+- If `Approved` + `resolution_kind = 'removed_review_only'` → `UPDATE reviews SET status='removed_review_only', comment=NULL`.
+- If `Approved` + `resolution_kind = 'removed_entirely'` → `UPDATE reviews SET status='removed_entirely'` (already filtered from lists and aggregate).
+- If `Rejected` → `UPDATE reviews SET status='active'` (already done).
+- Recalc aggregate via existing `recalc_account_status` path (already fires from `trg_reviews_recalc`); the review UPDATE will trigger it.
+- Insert two `notifications` rows (buyer_id, seller_id) with title/message derived from decision + `admin_notes`, and `meta = { appeal_id, review_id, decision, resolution_kind }`.
+
+## 2. Admin UI — explicit resolution picker
+
+`src/components/admin/TrustPanel.tsx` (review-appeals tab):
+- Replace the freeform status `Select` with a **Resolve appeal** dialog launched from each active appeal card. Keep the existing intermediate status controls (Pending / Waiting for Consent / Under Review / Waiting for Additional Evidence) as a separate small Select — only the terminal decision goes through the dialog.
+- New `src/components/admin/ResolveAppealDialog.tsx`:
+  - Radio group with three outcomes:
+    1. *Uphold — remove rating and review entirely* (`Approved` + `removed_entirely`)
+    2. *Uphold — remove written comment only, keep rating* (`Approved` + `removed_review_only`)
+    3. *Dismiss — review is legitimate* (`Rejected`, no `resolution_kind`)
+  - Required `admin_notes` textarea (explanation shown to both parties).
+  - Submit performs a single `update` on `review_appeals` setting `status`, `resolution_kind`, `admin_notes` — triggers handle the rest.
+- Remove the ad-hoc `prompt("Admin note")` button.
+
+## 3. Notifications UI (real-time)
+
+- `src/hooks/use-notifications.ts`: fetch latest 20 for `auth.uid()`, subscribe to `postgres_changes` INSERT on `notifications` filtered by `user_id`, expose `unreadCount`, `markRead(id)`, `markAllRead()`. Cleanup channel in `useEffect` return.
+- `src/components/notifications/NotificationBell.tsx`: bell icon + unread badge in `Header.tsx`; opens a `Popover` listing items (title, message, relative time, unread dot). Clicking marks read and, when `meta.review_id` exists, navigates to the relevant profile/review.
+- Toast on new incoming notification while app is open (sonner).
+
+## 4. Review list — reflect new state
+`src/components/reviews/UserReviewList.tsx` already handles `removed_review_only` (comment scrubbed) and filters `removed_entirely`. No change needed beyond confirming aggregate recomputes (existing trigger chain covers it).
+
+## 5. Out of scope
+- Email delivery via edge function (prompt marks it optional). Structure allows adding a `pg_net`/edge-function hook later; not built now.
+- Renaming `removed_review_only` → `removed_review_text_only` across the codebase (cosmetic, would touch multiple files and existing data).
 
 ## Technical notes
-- Use the existing `use-signed-url` hook for image messages so private `chat-attachments` render.
-- Since `messages.image_url` may already be a full signed URL depending on how `useThread` stores it, mirror whatever `MessageBubble` does today to avoid divergence.
-- Keep styles consistent with existing admin cards (shadcn `Dialog`, `ScrollArea`, `Avatar`).
+- All notification INSERTs happen inside the existing `SECURITY DEFINER` trigger, so RLS on `notifications` can safely block direct client inserts.
+- Realtime: enable publication + `REPLICA IDENTITY FULL` on `notifications`; subscribe with a filter `user_id=eq.<me>` so each client only receives its own rows.
+- The dialog submits status + resolution_kind + admin_notes in one update; the trigger's existing consent-revocation and review-status logic remains intact.
