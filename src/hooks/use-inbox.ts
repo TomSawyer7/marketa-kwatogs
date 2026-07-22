@@ -56,7 +56,7 @@ export function useInbox() {
           supabase.from("profiles").select("id, name, avatar_url").in("id", otherIds),
           supabase
             .from("messages")
-            .select("thread_id, body, sender_id, created_at, kind, image_url")
+            .select("thread_id, body, sender_id, created_at, kind, image_url, is_unsent")
             .in("thread_id", threadIds)
             .order("created_at", { ascending: false }),
           supabase
