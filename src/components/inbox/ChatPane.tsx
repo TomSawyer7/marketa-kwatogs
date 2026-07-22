@@ -208,6 +208,8 @@ export function ChatPane({ threadId, onBack, showBack }: Props) {
           onSubmitted={() => setReviewOpen(false)}
         />
       )}
+
+      <ProfilePeekDialog open={peekOpen} onOpenChange={setPeekOpen} userId={chat.otherId} />
     </div>
   );
 }
