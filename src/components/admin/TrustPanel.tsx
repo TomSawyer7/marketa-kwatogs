@@ -3,14 +3,25 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { formatRelative } from "@/lib/format";
 import { RatingStars } from "@/components/reviews/RatingStars";
+import { ShieldAlert } from "lucide-react";
 
 type Report = { id: string; review_id: string; reporter_id: string; reason: string; status: string; created_at: string;
   reviews?: { id: string; rating: number; comment: string | null; reviewee_id: string } | null };
 type Appeal = { id: string; user_id: string; message: string; status: string; created_at: string; admin_note: string | null };
 type Status = { user_id: string; status: string; reason: string | null; updated_at: string };
+type ReviewAppeal = {
+  id: string; review_id: string; transaction_id: string; seller_id: string; buyer_id: string;
+  reason: string; evidence_urls: string[] | null;
+  buyer_chat_consent: boolean; seller_chat_consent: boolean;
+  status: "Pending" | "Waiting for Consent" | "Under Review" | "Waiting for Additional Evidence" | "Approved" | "Rejected" | "Resolved";
+  admin_notes: string | null; created_at: string;
+  reviews?: { id: string; rating: number; comment: string | null } | null;
+};
 
 export function TrustPanel() {
   const [reports, setReports] = useState<Report[]>([]);
