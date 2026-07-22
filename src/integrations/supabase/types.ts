@@ -124,6 +124,7 @@ export type Database = {
           body: string
           created_at: string
           id: string
+          image_url: string | null
           kind: string
           meta: Json
           read_at: string | null
@@ -134,6 +135,7 @@ export type Database = {
           body?: string
           created_at?: string
           id?: string
+          image_url?: string | null
           kind?: string
           meta?: Json
           read_at?: string | null
@@ -144,6 +146,7 @@ export type Database = {
           body?: string
           created_at?: string
           id?: string
+          image_url?: string | null
           kind?: string
           meta?: Json
           read_at?: string | null
