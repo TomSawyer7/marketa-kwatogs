@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, MessageCircle } from "lucide-react";
+import { ArrowLeft, MessageCircle, MoreHorizontal, UserRound } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useThread } from "@/hooks/use-thread";
 import { useThreadTransaction } from "@/hooks/use-thread-transaction";
@@ -10,10 +10,14 @@ import { MessageBubble } from "@/components/inbox/MessageBubble";
 import { TransactionHub } from "@/components/inbox/TransactionHub";
 import { Composer } from "@/components/inbox/Composer";
 import { ListingContextBar, type ListingContext } from "@/components/inbox/ListingContextBar";
+import { ProfilePeekDialog } from "@/components/inbox/ProfilePeekDialog";
 import { ReviewForm } from "@/components/reviews/ReviewForm";
 import { useReviewEligibility } from "@/hooks/use-review-eligibility";
 import { EmptyState } from "@/components/marketa/EmptyState";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type Props = {
   threadId: string | null;
