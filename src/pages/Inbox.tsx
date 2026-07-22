@@ -174,6 +174,7 @@ const Inbox = () => {
                 row={r}
                 active={r.thread.id === activeId}
                 onClick={() => openThread(r.thread.id)}
+                onPeek={() => setPeekId(r.otherId)}
               />
             ))}
           </ul>
