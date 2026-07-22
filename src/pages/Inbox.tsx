@@ -184,7 +184,12 @@ const Inbox = () => {
   );
 
   if (isMobile) {
-    return <AppShell>{sidebar}</AppShell>;
+    return (
+      <AppShell>
+        {sidebar}
+        <ProfilePeekDialog open={!!peekId} onOpenChange={(v) => !v && setPeekId(null)} userId={peekId} />
+      </AppShell>
+    );
   }
 
   return (
@@ -195,24 +200,35 @@ const Inbox = () => {
           <ChatPane threadId={activeId ?? null} />
         </section>
       </div>
+      <ProfilePeekDialog open={!!peekId} onOpenChange={(v) => !v && setPeekId(null)} userId={peekId} />
     </AppShell>
   );
 };
 
-function ThreadItem({ row, onClick, active }: { row: InboxRow; onClick: () => void; active?: boolean }) {
+function ThreadItem({ row, onClick, active, onPeek }: { row: InboxRow; onClick: () => void; active?: boolean; onPeek?: () => void }) {
   return (
     <li>
-      <button
-        onClick={onClick}
+      <div
         className={cn(
-          "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition text-left",
+          "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition text-left cursor-pointer",
           active ? "bg-muted" : "hover:bg-muted/60",
         )}
+        onClick={onClick}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => { if (e.key === "Enter") onClick(); }}
       >
-        <Avatar className="h-11 w-11 shrink-0">
-          <AvatarImage src={row.otherAvatar ?? undefined} alt={row.otherName} />
-          <AvatarFallback>{row.otherName[0]}</AvatarFallback>
-        </Avatar>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onPeek?.(); }}
+          className="shrink-0 rounded-full focus:outline-none focus:ring-2 focus:ring-primary"
+          aria-label={`View ${row.otherName}'s profile`}
+        >
+          <Avatar className="h-11 w-11 shrink-0">
+            <AvatarImage src={row.otherAvatar ?? undefined} alt={row.otherName} />
+            <AvatarFallback>{row.otherName[0]}</AvatarFallback>
+          </Avatar>
+        </button>
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2">
             <span className="font-medium truncate text-sm">{row.otherName}</span>
