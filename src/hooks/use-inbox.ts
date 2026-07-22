@@ -56,7 +56,7 @@ export function useInbox() {
           supabase.from("profiles").select("id, name, avatar_url").in("id", otherIds),
           supabase
             .from("messages")
-            .select("thread_id, body, sender_id, created_at, kind, image_url")
+            .select("thread_id, body, sender_id, created_at, kind, image_url, is_unsent")
             .in("thread_id", threadIds)
             .order("created_at", { ascending: false }),
           supabase
@@ -84,7 +84,7 @@ export function useInbox() {
       );
       const lastByThread = new Map<
         string,
-        { body: string; sender_id: string | null; kind: string; image_url: string | null }
+        { body: string | null; sender_id: string | null; kind: string; image_url: string | null; is_unsent: boolean }
       >();
       for (const m of lastMsgs ?? []) {
         if (!lastByThread.has(m.thread_id))
@@ -93,6 +93,7 @@ export function useInbox() {
             sender_id: m.sender_id,
             kind: m.kind,
             image_url: (m as { image_url: string | null }).image_url ?? null,
+            is_unsent: (m as { is_unsent?: boolean }).is_unsent ?? false,
           });
       }
       const unreadCount = new Map<string, number>();
@@ -104,11 +105,13 @@ export function useInbox() {
         const otherId = t.user_a === user.id ? t.user_b : t.user_a;
         const p = pMap.get(otherId);
         const last = lastByThread.get(t.id);
-        const preview = last
-          ? last.image_url
-            ? last.body?.trim() || "📷 Photo"
-            : last.body
-          : "No messages yet";
+        const preview = !last
+          ? "No messages yet"
+          : last.is_unsent
+            ? "Message unsent"
+            : last.image_url
+              ? last.body?.trim() || "📷 Photo"
+              : last.body ?? "";
         return {
           thread: t as Thread,
           otherId,

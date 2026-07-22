@@ -28,6 +28,8 @@ export function ChatPane({ threadId, onBack, showBack }: Props) {
   const { tx } = useThreadTransaction(threadId ?? undefined);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [listing, setListing] = useState<ListingContext | null>(null);
+  const [replyTo, setReplyTo] = useState<import("@/lib/inbox").Message | null>(null);
+  const [editing, setEditing] = useState<import("@/lib/inbox").Message | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const eligibility = useReviewEligibility(chat.otherId ?? undefined);
@@ -125,16 +127,32 @@ export function ChatPane({ threadId, onBack, showBack }: Props) {
         {chat.messages.length === 0 && (
           <div className="text-center text-sm text-muted-foreground py-16">Say hi 👋</div>
         )}
-        {chat.messages.map((m) => (
-          <MessageBubble
-            key={m.id}
-            m={m}
-            mine={m.sender_id === user?.id}
-            tx={tx}
-            viewerRole={tx && user ? (tx.buyer_id === user.id ? "buyer" : tx.seller_id === user.id ? "seller" : null) : null}
-            onConfirmed={() => setReviewOpen(true)}
-          />
-        ))}
+        {chat.messages.map((m) => {
+          const quoted = m.reply_to_message_id
+            ? chat.messages.find((x) => x.id === m.reply_to_message_id) ?? null
+            : null;
+          return (
+            <div key={m.id} id={`msg-${m.id}`}>
+              <MessageBubble
+                m={m}
+                mine={m.sender_id === user?.id}
+                tx={tx}
+                viewerRole={tx && user ? (tx.buyer_id === user.id ? "buyer" : tx.seller_id === user.id ? "seller" : null) : null}
+                onConfirmed={() => setReviewOpen(true)}
+                quoted={quoted}
+                otherName={chat.otherProfile?.name ?? undefined}
+                onReply={(msg) => { setEditing(null); setReplyTo(msg); }}
+                onEdit={(msg) => { setReplyTo(null); setEditing(msg); }}
+                onUnsend={chat.unsendMessage ? (msg) => chat.unsendMessage(msg.id) : undefined}
+                onRemoveImage={chat.removeImage ? (msg) => chat.removeImage(msg.id) : undefined}
+                onJumpTo={(id) => {
+                  const el = document.getElementById(`msg-${id}`);
+                  el?.scrollIntoView({ behavior: "smooth", block: "center" });
+                }}
+              />
+            </div>
+          );
+        })}
         {chat.typing && (
           <div className="flex justify-start">
             <div className="bg-muted rounded-2xl rounded-bl-sm px-3 py-2 text-sm text-muted-foreground animate-pulse">…</div>
@@ -145,7 +163,14 @@ export function ChatPane({ threadId, onBack, showBack }: Props) {
       <Composer
         onSendText={chat.send}
         onSendImage={chat.sendImage}
+        onEdit={chat.editMessage}
         onTyping={chat.sendTyping}
+        replyTo={replyTo}
+        onCancelReply={() => setReplyTo(null)}
+        editing={editing}
+        onCancelEdit={() => setEditing(null)}
+        otherName={chat.otherProfile?.name ?? undefined}
+        meId={user?.id}
       />
 
       {reviewOpen && eligibility.status === "eligible" && (
