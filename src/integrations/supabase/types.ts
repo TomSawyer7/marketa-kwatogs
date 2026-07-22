@@ -230,6 +230,84 @@ export type Database = {
         }
         Relationships: []
       }
+      review_appeals: {
+        Row: {
+          admin_notes: string | null
+          buyer_chat_consent: boolean
+          buyer_consent_at: string | null
+          buyer_id: string
+          created_at: string
+          evidence_urls: string[]
+          id: string
+          reason: string
+          resolution_kind: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          review_id: string
+          seller_chat_consent: boolean
+          seller_consent_at: string | null
+          seller_id: string
+          status: string
+          transaction_id: string
+          updated_at: string
+        }
+        Insert: {
+          admin_notes?: string | null
+          buyer_chat_consent?: boolean
+          buyer_consent_at?: string | null
+          buyer_id: string
+          created_at?: string
+          evidence_urls?: string[]
+          id?: string
+          reason: string
+          resolution_kind?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          review_id: string
+          seller_chat_consent?: boolean
+          seller_consent_at?: string | null
+          seller_id: string
+          status?: string
+          transaction_id: string
+          updated_at?: string
+        }
+        Update: {
+          admin_notes?: string | null
+          buyer_chat_consent?: boolean
+          buyer_consent_at?: string | null
+          buyer_id?: string
+          created_at?: string
+          evidence_urls?: string[]
+          id?: string
+          reason?: string
+          resolution_kind?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          review_id?: string
+          seller_chat_consent?: boolean
+          seller_consent_at?: string | null
+          seller_id?: string
+          status?: string
+          transaction_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "review_appeals_review_id_fkey"
+            columns: ["review_id"]
+            isOneToOne: true
+            referencedRelation: "reviews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "review_appeals_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       review_reports: {
         Row: {
           created_at: string
@@ -283,6 +361,7 @@ export type Database = {
           reviewee_id: string
           reviewer_id: string
           role: string
+          status: string
           tags: string[]
           transaction_id: string
           updated_at: string
@@ -295,6 +374,7 @@ export type Database = {
           reviewee_id: string
           reviewer_id: string
           role: string
+          status?: string
           tags?: string[]
           transaction_id: string
           updated_at?: string
@@ -307,6 +387,7 @@ export type Database = {
           reviewee_id?: string
           reviewer_id?: string
           role?: string
+          status?: string
           tags?: string[]
           transaction_id?: string
           updated_at?: string
