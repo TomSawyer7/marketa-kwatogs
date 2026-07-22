@@ -153,10 +153,12 @@ export function ProfilePeekDialog({
         <DialogFooter className="sm:justify-between gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
           {profile && (
-            <Button asChild className="gap-1.5">
-              <Link to={`/seller/${profile.id}`} onClick={() => onOpenChange(false)}>
-                View full profile <ArrowUpRight className="h-4 w-4" />
-              </Link>
+            <Button
+              className="gap-1.5"
+              disabled={!profile.id}
+              onClick={() => goTo(`/seller/${profile.id}`)}
+            >
+              View full profile <ArrowUpRight className="h-4 w-4" />
             </Button>
           )}
         </DialogFooter>
