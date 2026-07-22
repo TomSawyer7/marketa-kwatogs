@@ -37,6 +37,8 @@ export function ChatPane({ threadId, onBack, showBack }: Props) {
   const [peekOpen, setPeekOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  const eligibility = useReviewEligibility(chat.otherId ?? undefined);
+
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [chat.messages.length, chat.typing]);
