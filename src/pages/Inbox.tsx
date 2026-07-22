@@ -255,7 +255,7 @@ function ThreadItem({ row, onClick, active, onPeek }: { row: InboxRow; onClick: 
             </div>
           </div>
         </div>
-      </button>
+      </div>
     </li>
   );
 }
