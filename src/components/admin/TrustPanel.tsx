@@ -120,7 +120,18 @@ export function TrustPanel() {
                   )}
                   {a.admin_notes && <p className="text-xs text-muted-foreground mt-2">Admin note: {a.admin_notes}</p>}
                   {consented && active && (
-                    <p className="text-xs text-emerald-600 mt-2">Chat audit unlocked — you have read access while this appeal is active.</p>
+                    <div className="mt-2">
+                      <Button size="sm" variant="outline" className="gap-1" onClick={() => setViewerAppeal(a)}>
+                        <Eye className="h-3.5 w-3.5" /> View chat audit
+                      </Button>
+                      <p className="text-[11px] text-emerald-600 mt-1">Chat audit unlocked while this appeal is under review.</p>
+                    </div>
+                  )}
+                  {consented && !active && (
+                    <p className="text-xs text-muted-foreground mt-2">Audit window closed (appeal resolved).</p>
+                  )}
+                  {!consented && active && (
+                    <p className="text-xs text-muted-foreground mt-2">Awaiting consent from both parties to unlock chat audit.</p>
                   )}
                 </div>
                 {active && (
