@@ -11,6 +11,7 @@ import { TransactionHub } from "@/components/inbox/TransactionHub";
 import { Composer } from "@/components/inbox/Composer";
 import { ListingContextBar, type ListingContext } from "@/components/inbox/ListingContextBar";
 import { ProfilePeekDialog } from "@/components/inbox/ProfilePeekDialog";
+import { AppealConsentBanner } from "@/components/inbox/AppealConsentBanner";
 import { ReviewForm } from "@/components/reviews/ReviewForm";
 import { useReviewEligibility } from "@/hooks/use-review-eligibility";
 import { EmptyState } from "@/components/marketa/EmptyState";
@@ -138,6 +139,8 @@ export function ChatPane({ threadId, onBack, showBack }: Props) {
       </div>
 
       {listing && <ListingContextBar listing={listing} txStatus={tx?.status ?? null} />}
+      <AppealConsentBanner transactionId={tx?.id ?? null} />
+
 
       <TransactionHub
         threadId={chat.thread.id}

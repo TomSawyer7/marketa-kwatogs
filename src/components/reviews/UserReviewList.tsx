@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Flag, MessageSquare } from "lucide-react";
+import { Flag, MessageSquare, ShieldAlert } from "lucide-react";
 import { formatRelative } from "@/lib/format";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -15,6 +15,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { POSITIVE_TAGS } from "@/lib/reviews";
+import { AppealReviewDialog } from "./AppealReviewDialog";
 
 type Row = {
   id: string;
@@ -23,20 +24,22 @@ type Row = {
   comment: string | null;
   role: "buyer" | "seller";
   reviewer_id: string;
+  reviewee_id: string;
   reviewer_name: string | null;
   created_at: string;
+  status: "active" | "removed_review_only" | "removed_entirely";
 };
 
 type Sort = "recent" | "helpful" | "highest" | "lowest";
 const TRUNCATE = 180;
 
-function ReviewCard({ r, onReport, canReport }: { r: Row; onReport: () => void; canReport: boolean }) {
+function ReviewCard({ r, onReport, canReport, canAppeal, onAppeal }: { r: Row; onReport: () => void; canReport: boolean; canAppeal: boolean; onAppeal: () => void }) {
   const [expanded, setExpanded] = useState(false);
-  const comment = r.comment ?? "";
+  const commentHidden = r.status === "removed_review_only";
+  const comment = commentHidden ? "" : (r.comment ?? "");
   const long = comment.length > TRUNCATE;
   const shown = expanded || !long ? comment : comment.slice(0, TRUNCATE).trimEnd() + "…";
   const title = r.tags?.[0] ?? (r.rating >= 4 ? "Great experience" : r.rating >= 3 ? "Okay" : "Needs improvement");
-  const positive = r.tags?.some((t) => (POSITIVE_TAGS as readonly string[]).includes(t)) ?? r.rating >= 4;
 
   return (
     <li className="bg-card border border-border rounded-2xl p-5">
@@ -50,13 +53,22 @@ function ReviewCard({ r, onReport, canReport }: { r: Row; onReport: () => void; 
             </span>
           </div>
         </div>
-        {canReport && (
-          <Button size="sm" variant="ghost" className="gap-1 text-muted-foreground -mr-2" onClick={onReport}>
-            <Flag className="h-3.5 w-3.5" />
-          </Button>
-        )}
+        <div className="flex items-center gap-1 -mr-2">
+          {canAppeal && (
+            <Button size="sm" variant="ghost" className="gap-1 text-muted-foreground" onClick={onAppeal} title="Appeal this review">
+              <ShieldAlert className="h-3.5 w-3.5" />
+            </Button>
+          )}
+          {canReport && (
+            <Button size="sm" variant="ghost" className="gap-1 text-muted-foreground" onClick={onReport} title="Report this review">
+              <Flag className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
       </div>
-      {comment && (
+      {commentHidden ? (
+        <p className="mt-3 text-sm italic text-muted-foreground">Comment removed by moderation.</p>
+      ) : comment ? (
         <div className="mt-3">
           <p className="text-sm whitespace-pre-line text-foreground/90">{shown}</p>
           {long && (
@@ -68,8 +80,8 @@ function ReviewCard({ r, onReport, canReport }: { r: Row; onReport: () => void; 
             </button>
           )}
         </div>
-      )}
-      {r.tags && r.tags.length > 0 && (
+      ) : null}
+      {!commentHidden && r.tags && r.tags.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">
           {r.tags.map((t) => (
             <span
@@ -89,30 +101,37 @@ export function UserReviewList({ userId }: { userId: string }) {
   const { user } = useAuth();
   const [rows, setRows] = useState<Row[] | null>(null);
   const [reportOpen, setReportOpen] = useState<string | null>(null);
+  const [appealOpen, setAppealOpen] = useState<string | null>(null);
+  const [appealedIds, setAppealedIds] = useState<Set<string>>(new Set());
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [sort, setSort] = useState<Sort>("recent");
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const { data, error } = await supabase
-        .from("reviews")
-        .select("id, rating, tags, comment, role, reviewer_id, created_at")
-        .eq("reviewee_id", userId)
-        .order("created_at", { ascending: false });
-      if (cancelled) return;
-      if (error) { setRows([]); return; }
-      const reviewerIds = Array.from(new Set((data ?? []).map((d) => d.reviewer_id)));
-      const { data: profiles } = reviewerIds.length
-        ? await supabase.from("profiles").select("id, name").in("id", reviewerIds)
-        : { data: [] as { id: string; name: string | null }[] };
-      const nameMap = new Map((profiles ?? []).map((p) => [p.id, p.name]));
-      if (cancelled) return;
-      setRows((data ?? []).map((r) => ({ ...r, reviewer_name: nameMap.get(r.reviewer_id) ?? null })) as Row[]);
-    })();
-    return () => { cancelled = true; };
-  }, [userId]);
+  const loadRows = async () => {
+    const { data, error } = await (supabase
+      .from("reviews") as any)
+      .select("id, rating, tags, comment, role, reviewer_id, reviewee_id, created_at, status")
+      .eq("reviewee_id", userId)
+      .neq("status", "removed_entirely")
+      .order("created_at", { ascending: false });
+    if (error) { setRows([]); return; }
+    const reviewerIds = Array.from(new Set((data ?? []).map((d: any) => d.reviewer_id)));
+    const { data: profiles } = reviewerIds.length
+      ? await supabase.from("profiles").select("id, name").in("id", reviewerIds as string[])
+      : { data: [] as { id: string; name: string | null }[] };
+    const nameMap = new Map((profiles ?? []).map((p) => [p.id, p.name]));
+    setRows((data ?? []).map((r: any) => ({ ...r, reviewer_name: nameMap.get(r.reviewer_id) ?? null, status: r.status ?? "active" })) as Row[]);
+
+    if (user && user.id === userId && data && data.length) {
+      const ids = (data as any[]).map((d) => d.id);
+      const { data: appeals } = await (supabase.from("review_appeals") as any)
+        .select("review_id")
+        .in("review_id", ids);
+      setAppealedIds(new Set(((appeals ?? []) as any[]).map((a) => a.review_id)));
+    }
+  };
+
+  useEffect(() => { loadRows(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [userId, user?.id]);
 
   const sorted = useMemo(() => {
     if (!rows) return rows;
@@ -171,9 +190,20 @@ export function UserReviewList({ userId }: { userId: string }) {
             r={r}
             canReport={!!user && user.id !== r.reviewer_id}
             onReport={() => setReportOpen(r.id)}
+            canAppeal={!!user && user.id === r.reviewee_id && r.status === "active" && !appealedIds.has(r.id)}
+            onAppeal={() => setAppealOpen(r.id)}
           />
         ))}
       </ul>
+
+      {appealOpen && (
+        <AppealReviewDialog
+          open={!!appealOpen}
+          onOpenChange={(v) => !v && setAppealOpen(null)}
+          reviewId={appealOpen}
+          onCreated={() => { setAppealOpen(null); loadRows(); }}
+        />
+      )}
 
       <Dialog open={!!reportOpen} onOpenChange={(v) => !v && setReportOpen(null)}>
         <DialogContent>
