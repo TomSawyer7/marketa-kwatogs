@@ -1,100 +1,90 @@
-# Anti-Fraud & Behavioral Monitoring Mechanism
+# Legal & User Agreement Module
 
-A modular, rule-based detection layer that watches auth, MPIN, reports, listings, messages, and transactions, scores risk, and surfaces alerts to admins. No existing feature is modified — detection runs alongside current flows via DB triggers, an edge function, and a new admin tab.
+Additive module — no changes to auth/KYC/MPIN/marketplace/messaging/trust/behavioral/audit logic. Only integration points are: registration checkbox, KYC certification checkbox, footer, Settings tab, and one new DB table for acceptance records.
 
-## Data model (new tables only)
+## 1. Database (migration)
 
-```text
-behavior_events         one row per detected suspicious event
-  id, user_id, category, event_type, severity (low|med|high),
-  score_delta, description, ip, device, browser, session_id,
-  metadata jsonb, created_at
+New table `public.legal_acceptances` to persist consent for audit:
 
-behavior_alerts         aggregated open alerts for admin triage
-  id, user_id, category, event_type, status (open|reviewing|dismissed|actioned),
-  first_seen_at, last_seen_at, occurrences, notes, resolved_by, resolved_at
-
-user_risk_scores        rolling fraud risk score per user
-  user_id PK, score int, risk_level, alerts_count,
-  last_event_at, under_review bool, updated_at
-
-login_lockouts          progressive login lock state
-  user_id PK (or email hash for pre-auth), failed_count, window_started_at,
-  lock_level int, locked_until, updated_at
-
-mpin_lockouts           progressive MPIN lock state
-  user_id PK, failed_count, window_started_at,
-  lock_level int, locked_until, updated_at
+```
+user_id uuid, document text ('terms'|'privacy'|'kyc_certification'),
+version text, accepted_at timestamptz, ip inet null, user_agent text null,
+context text ('registration'|'kyc'|'settings')
 ```
 
-All tables: RLS on, admin read via `has_role(auth.uid(),'admin')`, users can read only their own `user_risk_scores` row (optional — default deny). Full GRANTs for `authenticated` + `service_role`.
+- GRANTs: `authenticated` insert/select own; `service_role` all. RLS: users read/insert own; admins read all (via `has_role`).
+- Constants file `src/lib/legal-version.ts` exports current version string (e.g. `"2026-07-29"`).
 
-## Detection rules
+## 2. Legal content
 
-| # | Rule | Threshold | Action |
-|---|------|-----------|--------|
-| 1 | Failed login | 10 fails / 8 min rolling | Lock 10m → 20 → 40 → 80 … cap 24h. Reset on success. +10 score. |
-| 2 | Failed MPIN | 10 fails / 8 min | Same doubling policy, cap 24h. Forgot-MPIN still allowed. +15. |
-| 3 | Reporting abuse | >10/hr, >20/24h, many distinct targets, repeated rejected reports | Alert + mark under_review. +20. |
-| 4 | Listing abuse | >20 listings/10 min, rapid edits, mass deletes, create-then-delete loops | Alert. +20. |
-| 5 | Messaging spam | >50 msgs/min, identical body to many users, fan-out spikes | Alert. +20. |
-| 6 | Transaction abuse | Excess cancels/disputes, burst volume, repeated same-counterparty pattern | Alert. +25. |
+- `src/content/legal/terms.tsx`, `privacy.tsx`, `community.tsx` — structured section arrays `{ id, title, body }` so pages auto-generate the TOC.
+- Full professional copy for all sections listed in the request; Privacy Policy aligned with RA 10173 (Philippine DPA); Terms governed by Philippine law.
 
-**Risk levels:** 0–29 Low, 30–59 Medium, 60–100 High. Never auto-suspend; only flag `under_review=true`.
+## 3. Pages (public routes)
 
-## Server-side implementation
+New routes in `src/App.tsx`, above catch-all, unauthenticated-friendly:
+- `/legal/terms` → `Terms.tsx`
+- `/legal/privacy` → `Privacy.tsx`
+- `/legal/community` → `Community.tsx`
+- `/contact` → `Contact.tsx` (simple email + form info; no backend)
 
-1. **`behavior-detect` edge function** — single entrypoint invoked by:
-   - Client `signIn` wrapper (login pass/fail).
-   - Client `verify_mpin` wrapper (MPIN pass/fail).
-   - DB triggers `AFTER INSERT` on `review_reports`, `listings`, `messages`, `transactions` calling `pg_net` → this function (or a lightweight SQL evaluator — see fallback).
-   
-   Responsibilities: evaluate the relevant rule, upsert `*_lockouts`, insert `behavior_events`, upsert `behavior_alerts`, bump `user_risk_scores`, and emit an `audit_logs` entry via existing `append_audit_log` (categories `security.lockout`, `fraud.alert`).
+Shared `LegalLayout` component:
+- Sticky sidebar TOC (desktop) / collapsible TOC (mobile)
+- Reuses `AppShell` (Header + Footer), Back button, `prose` typography via Tailwind
+- Section anchors, "Last updated" date, print-friendly
 
-2. **Fallback pure-SQL path**: for the 4 DB-trigger sources, ship a `SECURITY DEFINER` function `public.evaluate_behavior(_category, _user_id, _meta)` that does thresholds + upserts directly, so detection works without outbound HTTP. Edge function is used for login/MPIN where the caller is already client-side.
+## 4. Footer
 
-3. **Login/MPIN gating**:
-   - `signIn`: before calling Supabase, RPC `check_login_lock(email)` → if locked, short-circuit with the remaining time.
-   - `verify_mpin`: extend existing RPC to also consult `mpin_lockouts` (the current 5-attempt/15-min logic stays as inner guard, new table adds the rolling-window progressive layer around it — no behavior change on the happy path).
+New `src/components/layout/Footer.tsx` with **Legal** column: Terms, Privacy, Community, Contact.
+Add `<Footer />` inside `AppShell` after `<main>`. Existing pages remain untouched because they render through `AppShell`. For pages that don't use AppShell (Landing, Auth, Verify), include the footer directly or wrap in a minimal `PublicShell`.
 
-4. **Audit**: every lockout and every alert calls `append_audit_log` with the required fields (user, event type, score, level, ip, device, browser, session_id passed from client meta already used by `audit-log`).
+## 5. Registration (Auth.tsx)
 
-## Client-side wiring (minimal, additive)
+- Add controlled `agreed` state + `Checkbox` above Create Account.
+- Label: "I have read and agree to the [Terms & Conditions](/legal/terms) and [Privacy Policy](/legal/privacy)." Links open in new tab.
+- Zod schema requires `agreed === true`.
+- Button `disabled={!agreed || busy}`.
+- On successful signUp, insert two `legal_acceptances` rows (terms, privacy) with current version + `context:'registration'`. Done client-side after session available; failure is logged but does not block signup.
 
-- `src/hooks/use-auth.tsx`: wrap `signIn` to call `check_login_lock` first and surface locked-message toast; no other flow change.
-- `src/hooks/use-mpin.tsx`: same for `verify`; show remaining lock time from RPC response; keep Forgot MPIN path untouched.
-- `src/lib/behavior.ts` (new): tiny helper to post client-observed context (ip is server-derived, device/browser/session come from existing audit helper).
+## 6. KYC (IDVerification component)
 
-## Admin dashboard
+- Add certification `Checkbox` on the review/submit step with the required text.
+- Submit button disabled until checked.
+- On submit success, insert `legal_acceptances` row `document:'kyc_certification'`, `context:'kyc'`.
 
-New tab **Behavior Monitoring** in `src/pages/Admin.tsx` (adjacent to Audit Logs).
+## 7. Settings — Legal tab
 
-Components under `src/components/admin/behavior/`:
-- `BehaviorWorkspace.tsx` — split view (list + detail), mirrors AuditLogsWorkspace style.
-- `RiskTable.tsx` — columns: Name, Email, Score, Level (colored badge), Alerts, Latest event, Time, Status. Filters: Low/Med/High, and per-category (Login, MPIN, Reporting, Messaging, Marketplace, Transaction). Search by name/email.
-- `UserBehaviorDetail.tsx` — profile header, current score & level, timeline of `behavior_events`, list of open `behavior_alerts` with "Mark reviewing / Dismiss / Escalate to suspension" actions (suspension reuses existing `account_status` admin flow — no new suspension logic).
+Add new "Legal" section to `src/pages/Settings.tsx`:
+- Three cards linking to Terms, Privacy, Community
+- Shows current document version + user's last-accepted version (from `legal_acceptances`)
+- "Re-accept latest" button when version differs → inserts row with `context:'settings'`
 
-Data fetched via a new `admin-behavior` edge function (list/detail/resolve actions) — same pattern as `admin-audit`.
+## 8. Audit logging
 
-## Files to add / touch
+Fire-and-forget `logEvent({ category:'legal', action:'accept_terms'|'accept_privacy'|'accept_kyc_certification', metadata:{ version, context } })` at each acceptance so it appears in the existing Audit Logs workspace.
 
-Add:
-- `supabase/migrations/<ts>_behavior_monitoring.sql` (tables, indexes, RLS, GRANTs, `evaluate_behavior`, triggers, `check_login_lock` RPC, extend `verify_mpin` wrapper).
-- `supabase/functions/behavior-detect/index.ts`
-- `supabase/functions/admin-behavior/index.ts`
-- `src/lib/behavior.ts`
-- `src/components/admin/behavior/BehaviorWorkspace.tsx`
-- `src/components/admin/behavior/RiskTable.tsx`
-- `src/components/admin/behavior/UserBehaviorDetail.tsx`
+## 9. Files
 
-Touch (additive only):
-- `src/hooks/use-auth.tsx` — pre-login lock check + post-fail notify.
-- `src/hooks/use-mpin.tsx` — pre-verify lock check.
-- `src/pages/Admin.tsx` — add "Behavior monitoring" tab.
+**Created**
+- `supabase/migrations/<ts>_legal_acceptances.sql`
+- `src/lib/legal-version.ts`
+- `src/lib/legal.ts` (recordAcceptance helper)
+- `src/content/legal/{terms,privacy,community}.tsx`
+- `src/components/legal/LegalLayout.tsx`
+- `src/components/layout/Footer.tsx`
+- `src/pages/legal/{Terms,Privacy,Community}.tsx`
+- `src/pages/Contact.tsx`
 
-## Guarantees
+**Edited (minimal, additive)**
+- `src/App.tsx` — 4 new routes
+- `src/components/layout/AppShell.tsx` — render `<Footer />`
+- `src/pages/Auth.tsx` — checkbox + gate + acceptance insert
+- `src/components/verify/IDVerification.tsx` — certification checkbox + insert
+- `src/pages/Settings.tsx` — Legal section
 
-- No changes to KYC, marketplace CRUD, messaging, reviews/appeals, trust score, or existing audit chain semantics — only additive inserts via `append_audit_log`.
-- All new tables have RLS + GRANTs and are admin-only by default.
-- Progressive lockout uses a rolling window; a successful login/MPIN clears `failed_count` and `lock_level`.
-- Risk score is advisory: only `under_review` flag is auto-set; suspensions remain manual admin actions.
+## Technical notes
+
+- No changes to `use-auth`, MPIN, audit chain, RLS on existing tables.
+- Version stored per acceptance enables future re-consent flows without migration.
+- Terms/Privacy/Community rendered from typed section arrays → single source drives page + TOC + Settings summary.
+- Dark mode inherited from existing tokens; typography via `prose prose-neutral dark:prose-invert`.
