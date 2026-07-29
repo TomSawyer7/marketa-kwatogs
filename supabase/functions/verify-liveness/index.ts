@@ -4,6 +4,8 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 type Body = {
   action: "blink" | "turn_head" | "smile";
   frames: string[];
+  video_path?: string | null;
+  frame_paths?: string[] | null;
 };
 
 function dataUrlToParts(d: string): { mime: string; b64: string } {
@@ -76,8 +78,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (verif.status !== "id_approved") {
-      return new Response(JSON.stringify({ error: "ID not yet approved by admin." }), {
+    if (verif.status !== "awaiting_liveness" && verif.status !== "id_approved") {
+      return new Response(JSON.stringify({ error: "Upload your ID before running the liveness check." }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
