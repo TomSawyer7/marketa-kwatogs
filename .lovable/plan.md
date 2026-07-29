@@ -1,50 +1,37 @@
 ## Goal
 
-After KYC verification, every user sets a 6-digit MPIN. Entering Inbox, Add Listing, or Settings requires the MPIN once per section per browser session. Five wrong tries force the password-based reset flow.
+Harden MPIN reset with a second factor (email OTP on top of the account password) and mask every MPIN entry so digits never render in plain text.
 
-## Database (new migration)
+## 1. Forgot MPIN → password + email OTP
 
-New table `public.user_mpins`:
-- `user_id` (primary key, one MPIN per user)
-- `mpin_hash` — bcrypt hash via pgcrypto, never plaintext
-- `failed_attempts`, `locked_until`, timestamps
-
-Access rules:
-- The table is never readable by the browser (no select policy for users) — the hash never leaves the database.
-- Users may only read a tiny "do I have an MPIN, am I locked out" status through a dedicated function.
-
-Three security-definer functions:
-- `mpin_status()` — returns `{ has_mpin, locked }` for the signed-in user.
-- `set_mpin(_mpin)` — validates the code is exactly 6 digits, stores the bcrypt hash, resets attempt counters. Used for both first-time setup and reset.
-- `verify_mpin(_mpin)` — compares against the hash, increments `failed_attempts` on failure, sets `locked_until` after 5 consecutive failures, clears counters on success. Returns `{ ok, attempts_left, locked }`. All counting happens server-side so it can't be bypassed from the client.
-
-Note: `set_mpin` is only callable by an authenticated session, and the reset flow re-authenticates the password immediately before calling it.
-
-## Frontend
-
-**New: `src/hooks/use-mpin.tsx`** — provider holding MPIN status plus the set of sections unlocked in the current session (kept in `sessionStorage`, cleared on sign-out and on new browser session). Exposes `unlock(section)`, `isUnlocked(section)`, `verify`, `setMpin`, `refresh`.
-
-**New: `src/pages/MpinSetup.tsx`** — route `/mpin-setup`. Six-digit OTP-style input, confirm-entry step, matching the app's existing verify pages.
-
-**New: `src/components/mpin/MpinGate.tsx`** — wraps a route. If the section is already unlocked this session it renders children; otherwise it renders the page behind a blocking dialog asking for the 6-digit MPIN. Shows remaining attempts, and after 5 failures (or via the "Forgot MPIN?" link) switches to the reset flow.
-
-**New: `src/components/mpin/ForgotMpinDialog.tsx`** — step 1: enter account password (re-authenticated against Supabase with the signed-in user's email); step 2: only on success, choose a new 6-digit MPIN. No email or OTP path is offered anywhere.
-
-**`src/components/auth/VerificationGate.tsx`** — add one more stage after KYC: verified user without an MPIN is redirected to `/mpin-setup` (public/always-allowed routes and `/admin` unchanged).
-
-**`src/App.tsx`** — register `/mpin-setup`; wrap `/inbox`, `/inbox/:id`, `/sell`, and `/settings` in `MpinGate` (inside `ProtectedRoute`). Mount `MpinProvider` under `AuthProvider`.
-
-## Behaviour summary
+`src/components/mpin/ForgotMpinDialog.tsx` becomes a 3-step dialog:
 
 ```text
-signup -> email OTP -> KYC -> MPIN setup -> marketplace
-Inbox / Sell / Settings -> MPIN dialog (first visit each session)
-5 wrong -> locked -> password re-entry -> new MPIN
+step 1: password   → re-authenticate (existing behaviour)
+step 2: email OTP  → 6-digit code sent to the account email
+step 3: new MPIN   → enter + confirm, then save
 ```
+
+- On successful password check, immediately request a code with `supabase.auth.signInWithOtp({ email, shouldCreateUser: false })` and move to step 2. The account email comes from the signed-in session — never typed by the user.
+- Step 2 verifies with `supabase.auth.verifyOtp({ email, token, type: "email" })`. Wrong/expired codes show an inline error and stay on the step.
+- Resend link with a 30s cooldown, matching the existing `/verify-email` page.
+- Only after the OTP verifies does step 3 appear and `set_mpin` become callable.
+- Closing the dialog resets all steps and clears password, code, and PIN state.
+
+Two new helpers in `src/hooks/use-mpin.tsx`: `sendResetOtp()` and `verifyResetOtp(code)`, both scoped to the current user's email, returning `{ error }` like the existing `reauthenticate`.
+
+No database changes — Supabase's existing email OTP setup handles delivery.
+
+## 2. Masked MPIN input
+
+`src/components/mpin/MpinInput.tsx` renders each filled slot as a dot instead of the digit, by rendering a masked character overlay in place of the slot's character. Applies everywhere the component is used: MPIN setup, both confirm fields, the section unlock gate, and the reset flow's new-MPIN step.
+
+- Filled slot shows ●, empty slots stay blank with the caret behaviour unchanged.
+- Keeps numeric keyboard, paste, backspace, and `onComplete` working as today.
+- Optional small "show/hide" eye toggle under the input so a user can reveal what they typed while setting it up — say the word if you'd rather have no reveal option at all.
 
 ## Technical notes
 
-- Hashing uses `crypt(_mpin, gen_salt('bf'))` from pgcrypto; verification uses `crypt(_mpin, mpin_hash) = mpin_hash`.
-- Password re-auth uses `supabase.auth.signInWithPassword` with the current user's email; the password is never stored or logged.
-- MPIN inputs use the existing `InputOTP` component with numeric-only, masked entry.
-- Admins bypass MPIN setup enforcement the same way they bypass KYC, but the gate still applies if they have an MPIN set.
+- The email OTP path is additive: password is still mandatory, so reset needs both factors.
+- `signInWithOtp` re-issues a session for the same signed-in user; no account switch is possible since the email is read from the session.
+- Masking is presentation-only; the raw value still flows to `verify_mpin` / `set_mpin` RPCs unchanged.
