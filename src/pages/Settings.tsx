@@ -108,9 +108,14 @@ const Settings = () => {
             <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="name">Display name</Label>
-                <Input id="name" maxLength={60} value={form.name} onChange={(e) => set("name", e.target.value)} />
-                {errors.name && <p className="text-xs text-destructive mt-1">{errors.name}</p>}
+                <Input id="name" value={form.name} readOnly disabled className="bg-muted text-muted-foreground cursor-not-allowed" />
+                <p className="text-xs text-muted-foreground mt-1">
+                  {isVerified
+                    ? "Locked to your verified ID name. Contact support if this is incorrect."
+                    : "Your display name will be set automatically once your ID is verified."}
+                </p>
               </div>
+
               <div>
                 <Label htmlFor="email">Email</Label>
                 <Input id="email" type="email" maxLength={120} value={form.email} onChange={(e) => set("email", e.target.value)} />
