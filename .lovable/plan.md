@@ -1,37 +1,34 @@
-## Goal
+## What's actually wrong
 
-Harden MPIN reset with a second factor (email OTP on top of the account password) and mask every MPIN entry so digits never render in plain text.
+The reset dialog already calls `signInWithOtp`, which is the same Supabase OTP mechanism registration uses. The email you received is a link because Supabase renders a **different template** for this call: existing-user OTP emails use the **Magic Link** template, while registration used the **Confirm signup** template (which you already edited to print `{{ .Token }}`). The Magic Link template is still the stock "Follow this link to login" markup, so a link goes out instead of a code.
 
-## 1. Forgot MPIN → password + email OTP
+So the fix is two parts: one dashboard template change, one code change.
 
-`src/components/mpin/ForgotMpinDialog.tsx` becomes a 3-step dialog:
+## 1. Dashboard (one-time, you do this)
 
-```text
-step 1: password   → re-authenticate (existing behaviour)
-step 2: email OTP  → 6-digit code sent to the account email
-step 3: new MPIN   → enter + confirm, then save
+In Supabase → Authentication → Email Templates → **Magic Link**, replace the body with a token-based version, mirroring the Confirm signup template:
+
+```html
+<h2>Your Marketa verification code</h2>
+<p>Enter this code to continue:</p>
+<h1>{{ .Token }}</h1>
+<p>This code expires in 1 hour and can be used once.</p>
 ```
 
-- On successful password check, immediately request a code with `supabase.auth.signInWithOtp({ email, shouldCreateUser: false })` and move to step 2. The account email comes from the signed-in session — never typed by the user.
-- Step 2 verifies with `supabase.auth.verifyOtp({ email, token, type: "email" })`. Wrong/expired codes show an inline error and stay on the step.
-- Resend link with a 30s cooldown, matching the existing `/verify-email` page.
-- Only after the OTP verifies does step 3 appear and `set_mpin` become callable.
-- Closing the dialog resets all steps and clears password, code, and PIN state.
+Token length is a single project-wide setting (Authentication → Providers → Email → OTP length), already 8 for registration, so this code is 8 digits automatically — same generation, same expiry, same verification path.
 
-Two new helpers in `src/hooks/use-mpin.tsx`: `sendResetOtp()` and `verifyResetOtp(code)`, both scoped to the current user's email, returning `{ error }` like the existing `reauthenticate`.
+## 2. Code change
 
-No database changes — Supabase's existing email OTP setup handles delivery.
+`src/components/mpin/ForgotMpinDialog.tsx`:
+- Change `OTP_LENGTH` from 6 to 8 so the reset step matches registration exactly.
+- Widen the OTP row layout for 8 slots (smaller slot width so it fits the dialog on mobile).
+- Keep the flow order unchanged: password → 8-digit email OTP → new MPIN.
 
-## 2. Masked MPIN input
+`src/hooks/use-mpin.tsx`:
+- `sendResetOtp` / `verifyResetOtp` stay as they are — `signInWithOtp({ shouldCreateUser: false })` + `verifyOtp({ type: "email" })` is the identical pair `/verify-email` uses.
 
-`src/components/mpin/MpinInput.tsx` renders each filled slot as a dot instead of the digit, by rendering a masked character overlay in place of the slot's character. Applies everywhere the component is used: MPIN setup, both confirm fields, the section unlock gate, and the reset flow's new-MPIN step.
+No database or edge function changes.
 
-- Filled slot shows ●, empty slots stay blank with the caret behaviour unchanged.
-- Keeps numeric keyboard, paste, backspace, and `onComplete` working as today.
-- Optional small "show/hide" eye toggle under the input so a user can reveal what they typed while setting it up — say the word if you'd rather have no reveal option at all.
+## Note
 
-## Technical notes
-
-- The email OTP path is additive: password is still mandatory, so reset needs both factors.
-- `signInWithOtp` re-issues a session for the same signed-in user; no account switch is possible since the email is read from the session.
-- Masking is presentation-only; the raw value still flows to `verify_mpin` / `set_mpin` RPCs unchanged.
+Until the Magic Link template is updated in the dashboard, the reset email will keep arriving as a link no matter what the app code does — the template controls what's rendered.

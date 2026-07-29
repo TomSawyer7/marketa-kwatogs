@@ -15,7 +15,7 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp
 import { useMpin } from "@/hooks/use-mpin";
 import { MpinInput, MPIN_LENGTH } from "./MpinInput";
 
-const OTP_LENGTH = 6;
+const OTP_LENGTH = 8;
 
 type Step = "password" | "otp" | "mpin";
 
@@ -186,7 +186,7 @@ export function ForgotMpinDialog({
               >
                 <InputOTPGroup>
                   {Array.from({ length: OTP_LENGTH }).map((_, i) => (
-                    <InputOTPSlot key={i} index={i} />
+                    <InputOTPSlot key={i} index={i} className="h-11 w-9 text-base" />
                   ))}
                 </InputOTPGroup>
               </InputOTP>
