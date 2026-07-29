@@ -625,7 +625,9 @@ function Step2Liveness({ onPassed }: { onPassed: () => void }) {
         <div className="h-9 w-9 rounded-full bg-primary/10 text-primary grid place-items-center"><Video className="h-4 w-4" /></div>
         <div>
           <h2 className="font-semibold">Step 2 · Active liveness check</h2>
-          <p className="text-sm text-muted-foreground">Complete 4 quick face challenges to prove you're a real person.</p>
+          <p className="text-sm text-muted-foreground">
+            Complete 4 quick face challenges. The session is recorded and sent to an admin for final review.
+          </p>
         </div>
       </div>
 
@@ -667,7 +669,7 @@ function Step2Liveness({ onPassed }: { onPassed: () => void }) {
 
       {result && (
         <div className={`mt-4 rounded-lg border p-3 text-sm ${result.passed ? "border-emerald-500/30 bg-emerald-500/5" : "border-destructive/30 bg-destructive/5"}`}>
-          <p className="font-medium">{result.passed ? "Match confirmed" : "Verification failed"}</p>
+          <p className="font-medium">{result.passed ? "Liveness submitted for admin review" : "Liveness check failed"}</p>
           <p className="text-muted-foreground">Confidence: {Math.round(result.score)}% — {result.reason}</p>
         </div>
       )}
