@@ -221,6 +221,96 @@ export type Database = {
         }
         Relationships: []
       }
+      behavior_alerts: {
+        Row: {
+          category: string
+          event_type: string
+          first_seen_at: string
+          id: string
+          last_seen_at: string
+          notes: string | null
+          occurrences: number
+          resolved_at: string | null
+          resolved_by: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          category: string
+          event_type: string
+          first_seen_at?: string
+          id?: string
+          last_seen_at?: string
+          notes?: string | null
+          occurrences?: number
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          category?: string
+          event_type?: string
+          first_seen_at?: string
+          id?: string
+          last_seen_at?: string
+          notes?: string | null
+          occurrences?: number
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      behavior_events: {
+        Row: {
+          browser: string | null
+          category: string
+          created_at: string
+          description: string | null
+          device: string | null
+          event_type: string
+          id: string
+          ip: unknown
+          metadata: Json
+          score_delta: number
+          session_id: string | null
+          severity: string
+          user_id: string | null
+        }
+        Insert: {
+          browser?: string | null
+          category: string
+          created_at?: string
+          description?: string | null
+          device?: string | null
+          event_type: string
+          id?: string
+          ip?: unknown
+          metadata?: Json
+          score_delta?: number
+          session_id?: string | null
+          severity?: string
+          user_id?: string | null
+        }
+        Update: {
+          browser?: string | null
+          category?: string
+          created_at?: string
+          description?: string | null
+          device?: string | null
+          event_type?: string
+          id?: string
+          ip?: unknown
+          metadata?: Json
+          score_delta?: number
+          session_id?: string | null
+          severity?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       listings: {
         Row: {
           category: string
@@ -266,6 +356,36 @@ export type Database = {
           seller_id?: string
           title?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      login_lockouts: {
+        Row: {
+          failed_count: number
+          identifier: string
+          lock_level: number
+          locked_until: string | null
+          updated_at: string
+          user_id: string | null
+          window_started_at: string | null
+        }
+        Insert: {
+          failed_count?: number
+          identifier: string
+          lock_level?: number
+          locked_until?: string | null
+          updated_at?: string
+          user_id?: string | null
+          window_started_at?: string | null
+        }
+        Update: {
+          failed_count?: number
+          identifier?: string
+          lock_level?: number
+          locked_until?: string | null
+          updated_at?: string
+          user_id?: string | null
+          window_started_at?: string | null
         }
         Relationships: []
       }
@@ -331,6 +451,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      mpin_lockouts: {
+        Row: {
+          failed_count: number
+          lock_level: number
+          locked_until: string | null
+          updated_at: string
+          user_id: string
+          window_started_at: string | null
+        }
+        Insert: {
+          failed_count?: number
+          lock_level?: number
+          locked_until?: string | null
+          updated_at?: string
+          user_id: string
+          window_started_at?: string | null
+        }
+        Update: {
+          failed_count?: number
+          lock_level?: number
+          locked_until?: string | null
+          updated_at?: string
+          user_id?: string
+          window_started_at?: string | null
+        }
+        Relationships: []
       }
       notifications: {
         Row: {
@@ -751,6 +898,36 @@ export type Database = {
         }
         Relationships: []
       }
+      user_risk_scores: {
+        Row: {
+          alerts_count: number
+          last_event_at: string | null
+          risk_level: string
+          score: number
+          under_review: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          alerts_count?: number
+          last_event_at?: string | null
+          risk_level?: string
+          score?: number
+          under_review?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          alerts_count?: number
+          last_event_at?: string | null
+          risk_level?: string
+          score?: number
+          under_review?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -977,8 +1154,13 @@ export type Database = {
     }
     Functions: {
       append_audit_log: { Args: { _payload: Json }; Returns: string }
+      bump_risk_score: {
+        Args: { _delta: number; _mark_review?: boolean; _user_id: string }
+        Returns: undefined
+      }
       cancel_deletion: { Args: never; Returns: Json }
       canonical_jsonb: { Args: { _j: Json }; Returns: string }
+      check_login_lock: { Args: { _email: string }; Returns: Json }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -990,6 +1172,23 @@ export type Database = {
       mpin_status: { Args: never; Returns: Json }
       reactivate_account: { Args: never; Returns: Json }
       recalc_account_status: { Args: { _user_id: string }; Returns: undefined }
+      record_behavior_event: {
+        Args: {
+          _category: string
+          _description: string
+          _event_type: string
+          _mark_review?: boolean
+          _metadata?: Json
+          _score_delta: number
+          _severity: string
+          _user_id: string
+        }
+        Returns: string
+      }
+      register_login_attempt: {
+        Args: { _email: string; _success: boolean; _user_id?: string }
+        Returns: Json
+      }
       request_deactivation: {
         Args: { _days?: number; _mpin: string }
         Returns: Json
