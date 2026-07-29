@@ -1,11 +1,11 @@
-import { Clock, ShieldCheck, CheckCircle2, XCircle } from "lucide-react";
+import { Clock, Video, CheckCircle2, XCircle } from "lucide-react";
 
-type Stats = { pending: number; id_approved: number; verified: number; rejected: number };
+type Stats = { pending: number; awaiting_liveness: number; verified: number; rejected: number };
 
 export function StatsHeader({ stats }: { stats: Stats }) {
   const items = [
-    { label: "Pending", value: stats.pending, icon: Clock, accent: "text-amber-600 dark:text-amber-400", bg: "bg-amber-500/10" },
-    { label: "ID approved", value: stats.id_approved, icon: ShieldCheck, accent: "text-blue-600 dark:text-blue-400", bg: "bg-blue-500/10" },
+    { label: "Ready for review", value: stats.pending, icon: Clock, accent: "text-amber-600 dark:text-amber-400", bg: "bg-amber-500/10" },
+    { label: "Awaiting liveness", value: stats.awaiting_liveness, icon: Video, accent: "text-blue-600 dark:text-blue-400", bg: "bg-blue-500/10" },
     { label: "Verified", value: stats.verified, icon: CheckCircle2, accent: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-500/10" },
     { label: "Rejected", value: stats.rejected, icon: XCircle, accent: "text-destructive", bg: "bg-destructive/10" },
   ];

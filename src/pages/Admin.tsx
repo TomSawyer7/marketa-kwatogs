@@ -43,7 +43,7 @@ const Admin = () => {
 
   const stats = useMemo(() => ({
     pending: items.filter((i) => i.status === "pending").length,
-    id_approved: items.filter((i) => i.status === "id_approved").length,
+    awaiting_liveness: items.filter((i) => i.status === "awaiting_liveness" || i.status === "id_approved").length,
     verified: items.filter((i) => i.status === "verified").length,
     rejected: items.filter((i) => i.status === "rejected").length,
   }), [items]);
