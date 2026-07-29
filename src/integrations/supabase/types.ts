@@ -613,7 +613,10 @@ export type Database = {
           id_approved_by: string | null
           id_back_path: string
           id_front_path: string
+          liveness_checked_at: string | null
+          liveness_frame_paths: string[]
           liveness_passed: boolean
+          liveness_video_path: string | null
           ocr_address: string | null
           ocr_blood_type: string | null
           ocr_date_of_birth: string | null
@@ -647,7 +650,10 @@ export type Database = {
           id_approved_by?: string | null
           id_back_path: string
           id_front_path: string
+          liveness_checked_at?: string | null
+          liveness_frame_paths?: string[]
           liveness_passed?: boolean
+          liveness_video_path?: string | null
           ocr_address?: string | null
           ocr_blood_type?: string | null
           ocr_date_of_birth?: string | null
@@ -681,7 +687,10 @@ export type Database = {
           id_approved_by?: string | null
           id_back_path?: string
           id_front_path?: string
+          liveness_checked_at?: string | null
+          liveness_frame_paths?: string[]
           liveness_passed?: boolean
+          liveness_video_path?: string | null
           ocr_address?: string | null
           ocr_blood_type?: string | null
           ocr_date_of_birth?: string | null
