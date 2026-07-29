@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { MarketaProvider } from "@/store/marketa";
 import { AuthProvider } from "@/hooks/use-auth";
 import { MpinProvider } from "@/hooks/use-mpin";
+import { AccountLifecycleProvider } from "@/hooks/use-account-lifecycle";
 import { AccountStatusProvider } from "@/hooks/use-account-status";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { VerificationGate } from "@/components/auth/VerificationGate";
@@ -41,6 +42,7 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <MpinProvider>
+            <AccountLifecycleProvider>
             <AccountStatusProvider>
               <MarketaProvider>
                 <VerificationGate>
@@ -69,6 +71,7 @@ const App = () => (
                 </VerificationGate>
               </MarketaProvider>
             </AccountStatusProvider>
+            </AccountLifecycleProvider>
           </MpinProvider>
         </AuthProvider>
       </BrowserRouter>

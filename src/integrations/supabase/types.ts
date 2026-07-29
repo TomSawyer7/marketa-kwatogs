@@ -50,6 +50,66 @@ export type Database = {
         }
         Relationships: []
       }
+      account_deletion_log: {
+        Row: {
+          created_at: string
+          deleted_at: string
+          grace_started_at: string | null
+          had_kyc: boolean
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string
+          grace_started_at?: string | null
+          had_kyc?: boolean
+          id?: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string
+          grace_started_at?: string | null
+          had_kyc?: boolean
+          id?: string
+        }
+        Relationships: []
+      }
+      account_lifecycle: {
+        Row: {
+          created_at: string
+          deactivated_at: string | null
+          deactivation_days: number | null
+          delete_after: string | null
+          deletion_requested_at: string | null
+          reactivate_at: string | null
+          state: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          deactivated_at?: string | null
+          deactivation_days?: number | null
+          delete_after?: string | null
+          deletion_requested_at?: string | null
+          reactivate_at?: string | null
+          state?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          deactivated_at?: string | null
+          deactivation_days?: number | null
+          delete_after?: string | null
+          deletion_requested_at?: string | null
+          reactivate_at?: string | null
+          state?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       account_status: {
         Row: {
           created_at: string
@@ -832,6 +892,7 @@ export type Database = {
       }
     }
     Functions: {
+      cancel_deletion: { Args: never; Returns: Json }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -839,8 +900,15 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_account_hidden: { Args: { _user_id: string }; Returns: boolean }
       mpin_status: { Args: never; Returns: Json }
+      reactivate_account: { Args: never; Returns: Json }
       recalc_account_status: { Args: { _user_id: string }; Returns: undefined }
+      request_deactivation: {
+        Args: { _days?: number; _mpin: string }
+        Returns: Json
+      }
+      request_deletion: { Args: { _mpin: string }; Returns: Json }
       set_mpin: { Args: { _mpin: string }; Returns: Json }
       verify_mpin: { Args: { _mpin: string }; Returns: Json }
       verify_mpin_reset_otp: { Args: { _code: string }; Returns: Json }
