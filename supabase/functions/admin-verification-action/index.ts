@@ -221,16 +221,18 @@ Deno.serve(async (req) => {
       }, { onConflict: "user_id" });
       if (upsertErr) throw upsertErr;
 
-      // Mirror the verified full name onto the public profile so the header shows it
-      await admin.from("profiles").update({ name: fullName }).eq("id", body.user_id);
+      // Mirror the verified full name onto the public profile and grant marketplace access
+      await admin.from("profiles").update({ name: fullName, is_verified: true }).eq("id", body.user_id);
 
+      const now = new Date().toISOString();
       const { error } = await admin
         .from("verifications")
         .update({
-          status: "id_approved",
+          status: "verified",
           admin_notes: body.notes ?? null,
-          id_approved_at: new Date().toISOString(),
+          id_approved_at: now,
           id_approved_by: userData.user.id,
+          verified_at: now,
         })
         .eq("user_id", body.user_id);
 
