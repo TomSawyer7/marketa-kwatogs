@@ -285,9 +285,9 @@ export function SubmissionDetail({
 
         {/* Decision step */}
         {isPending && (
-          <Section icon={ShieldCheck} title="Step 2 · Decide">
+          <Section icon={ShieldCheck} title="Step 2 · Approve marketplace access">
             <p className="text-[11px] text-muted-foreground mb-2">
-              Approval requires eVerify to be marked as passed.
+              Approving grants the user marketplace access. Requires eVerify passed and a completed liveness check.
             </p>
             <Textarea
               placeholder="Optional notes (shown to user if rejected)…"
@@ -299,11 +299,11 @@ export function SubmissionDetail({
             <div className="flex gap-2">
               <Button
                 size="sm"
-                disabled={busy || item.everify_status !== "passed"}
+                disabled={busy || item.everify_status !== "passed" || !item.liveness_checked_at}
                 onClick={() => act("approve_id")}
               >
                 {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                Approve ID
+                Approve & verify
               </Button>
               <Button size="sm" variant="destructive" disabled={busy} onClick={() => act("reject")}>
                 <XCircle className="h-3.5 w-3.5" /> Reject
