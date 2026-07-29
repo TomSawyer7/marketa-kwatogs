@@ -78,7 +78,7 @@ export function AccountLifecycleProvider({ children }: { children: ReactNode }) 
   }, [authLoading, refresh]);
 
   const call = useCallback(
-    async (fn: () => Promise<{ data: unknown; error: { message: string } | null }>) => {
+    async (fn: () => PromiseLike<{ data: unknown; error: { message: string } | null }>) => {
       const { data, error } = await fn();
       if (error) return { error: error.message };
       const res = (data ?? {}) as RpcResult;
