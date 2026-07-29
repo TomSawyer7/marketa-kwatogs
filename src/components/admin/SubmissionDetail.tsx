@@ -28,6 +28,9 @@ export type DetailItem = {
   ocr_date_of_issue: string | null;
   face_match_score: number | null;
   liveness_passed: boolean | null;
+  liveness_video_path: string | null;
+  liveness_frame_paths: string[] | null;
+  liveness_checked_at: string | null;
   admin_notes: string | null;
   submitted_at: string;
   verified_at: string | null;
