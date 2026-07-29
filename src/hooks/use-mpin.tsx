@@ -30,6 +30,9 @@ type MpinCtx = {
   verify: (mpin: string, section?: MpinSection) => Promise<VerifyResult>;
   setMpin: (mpin: string) => Promise<{ error: string | null }>;
   reauthenticate: (password: string) => Promise<{ error: string | null }>;
+  sendResetOtp: () => Promise<{ error: string | null }>;
+  verifyResetOtp: (code: string) => Promise<{ error: string | null }>;
+  email: string | null;
 };
 
 const Ctx = createContext<MpinCtx | null>(null);
@@ -157,6 +160,28 @@ export function MpinProvider({ children }: { children: ReactNode }) {
     [user],
   );
 
+  const sendResetOtp = useCallback(async () => {
+    if (!user?.email) return { error: "No email on this account." };
+    const { error } = await supabase.auth.signInWithOtp({
+      email: user.email,
+      options: { shouldCreateUser: false },
+    });
+    return { error: error ? error.message || "Could not send the code." : null };
+  }, [user]);
+
+  const verifyResetOtp = useCallback(
+    async (code: string) => {
+      if (!user?.email) return { error: "No email on this account." };
+      const { error } = await supabase.auth.verifyOtp({
+        email: user.email,
+        token: code,
+        type: "email",
+      });
+      return { error: error ? error.message || "Invalid or expired code." : null };
+    },
+    [user],
+  );
+
   const value = useMemo(
     () => ({
       loading,
@@ -168,8 +193,24 @@ export function MpinProvider({ children }: { children: ReactNode }) {
       verify,
       setMpin,
       reauthenticate,
+      sendResetOtp,
+      verifyResetOtp,
+      email: user?.email ?? null,
     }),
-    [loading, status, refresh, isUnlocked, unlock, lockAll, verify, setMpin, reauthenticate],
+    [
+      loading,
+      status,
+      refresh,
+      isUnlocked,
+      unlock,
+      lockAll,
+      verify,
+      setMpin,
+      reauthenticate,
+      sendResetOtp,
+      verifyResetOtp,
+      user,
+    ],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
