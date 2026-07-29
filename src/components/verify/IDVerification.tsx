@@ -289,11 +289,24 @@ export function IDVerification({ onSubmitted }: { onSubmitted: () => void }) {
 
         {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
 
-        <div className="mt-5 flex flex-col sm:flex-row gap-2">
+        <label className="mt-5 flex items-start gap-2 text-sm text-muted-foreground bg-secondary/30 border border-border rounded-md p-3">
+          <Checkbox
+            id="kyc-certify"
+            checked={certified}
+            onCheckedChange={(v) => setCertified(v === true)}
+            className="mt-0.5"
+          />
+          <span>
+            I certify that all information and identification documents I submitted are true,
+            accurate, complete, and belong to me.
+          </span>
+        </label>
+
+        <div className="mt-4 flex flex-col sm:flex-row gap-2">
           <Button variant="outline" className="flex-1" disabled={confirming} onClick={handleRetry}>
             <RefreshCw className="h-4 w-4 mr-2" /> Retry upload
           </Button>
-          <Button className="flex-1" disabled={confirming} onClick={handleConfirm}>
+          <Button className="flex-1" disabled={confirming || !certified} onClick={handleConfirm}>
             {confirming
               ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Submitting…</>
               : <><CheckCircle2 className="h-4 w-4 mr-2" /> Confirm details</>}
