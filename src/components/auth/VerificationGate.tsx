@@ -10,10 +10,11 @@ import { useAuth } from "@/hooks/use-auth";
  */
 const ALWAYS_ALLOWED = ["/", "/auth", "/forgot-password", "/reset-password"];
 const VERIFY_PATH = "/verify";
+const VERIFY_EMAIL_PATH = "/verify-email";
 const ADMIN_PATH = "/admin";
 
 export function VerificationGate({ children }: { children: ReactNode }) {
-  const { user, loading, isVerified, isAdmin } = useAuth();
+  const { user, loading, isVerified, isAdmin, emailVerified } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -31,12 +32,20 @@ export function VerificationGate({ children }: { children: ReactNode }) {
 
   // Admins bypass verification entirely
   if (isAdmin) {
-    if (path === VERIFY_PATH) return <Navigate to={ADMIN_PATH} replace />;
+    if (path === VERIFY_PATH || path === VERIFY_EMAIL_PATH) return <Navigate to={ADMIN_PATH} replace />;
     return <>{children}</>;
   }
 
-  // Logged in but unverified
+  // Logged in but email not confirmed → force email OTP step first
+  if (!emailVerified) {
+    const allowed = path === VERIFY_EMAIL_PATH || ALWAYS_ALLOWED.includes(path);
+    if (!allowed) return <Navigate to={VERIFY_EMAIL_PATH} replace />;
+    return <>{children}</>;
+  }
+
+  // Email verified but KYC not done
   if (!isVerified) {
+    if (path === VERIFY_EMAIL_PATH) return <Navigate to={VERIFY_PATH} replace />;
     const allowed = path === VERIFY_PATH || ALWAYS_ALLOWED.includes(path);
     if (!allowed) return <Navigate to={VERIFY_PATH} replace />;
   }
