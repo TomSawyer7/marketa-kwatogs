@@ -122,6 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading,
         isVerified,
         isAdmin,
+        emailVerified: Boolean(user?.email_confirmed_at),
         refreshStatus,
         signIn,
         signUp,
