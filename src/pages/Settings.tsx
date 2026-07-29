@@ -15,11 +15,11 @@ import { toast } from "sonner";
 import { Camera, ArrowLeft, LogOut } from "lucide-react";
 
 const profileSchema = z.object({
-  name: z.string().trim().min(2, "Name must be at least 2 characters").max(60),
   email: z.string().trim().email("Enter a valid email").max(120),
   location: z.string().trim().min(2, "Location is required").max(80),
   bio: z.string().trim().max(280, "Keep your bio under 280 characters"),
 });
+
 
 const Settings = () => {
   const navigate = useNavigate();
