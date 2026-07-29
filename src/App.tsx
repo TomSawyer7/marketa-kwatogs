@@ -41,6 +41,7 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <MpinProvider>
+            <AccountLifecycleProvider>
             <AccountStatusProvider>
               <MarketaProvider>
                 <VerificationGate>
