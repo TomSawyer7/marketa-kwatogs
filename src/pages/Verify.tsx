@@ -10,7 +10,7 @@ import { compressImageToDataUrl } from "@/lib/image-quality";
 import { IDVerification } from "@/components/verify/IDVerification";
 
 type VerifRow = {
-  status: "pending" | "id_approved" | "verified" | "rejected" | null;
+  status: "awaiting_liveness" | "pending" | "id_approved" | "verified" | "rejected" | null;
   ocr_full_name: string | null;
   ocr_first_name: string | null;
   ocr_middle_name: string | null;
@@ -91,7 +91,8 @@ const Verify = () => {
           </div>
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Verify your identity</h1>
           <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
-            Marketa requires verified identities to keep transactions safe. Complete both steps to access the marketplace.
+            Marketa requires verified identities to keep transactions safe. Upload your ID, complete the liveness check,
+            then an admin reviews everything before you get marketplace access.
           </p>
         </header>
 
@@ -102,12 +103,12 @@ const Verify = () => {
             <IDVerification onSubmitted={loadStatus} />
           )}
 
-          {status === "pending" && (
-            <PendingPanel verif={verif!} />
+          {(status === "awaiting_liveness" || status === "id_approved") && (
+            <Step2Liveness onPassed={async () => { await refreshStatus(); await loadStatus(); }} />
           )}
 
-          {status === "id_approved" && (
-            <Step2Liveness onPassed={async () => { await refreshStatus(); await loadStatus(); }} />
+          {status === "pending" && (
+            <PendingPanel verif={verif!} />
           )}
 
           {status === "verified" && <SuccessPanel score={verif?.face_match_score ?? 100} />}
@@ -129,14 +130,14 @@ export default Verify;
 function Stepper({ status }: { status: VerifRow["status"] }) {
   const steps = [
     { key: "id", label: "ID Upload" },
-    { key: "approval", label: "Admin Review" },
     { key: "live", label: "Liveness" },
+    { key: "approval", label: "Admin Review" },
     { key: "done", label: "Verified" },
   ];
   const activeIdx =
     status === "verified" ? 3 :
-    status === "id_approved" ? 2 :
-    status === "pending" ? 1 : 0;
+    status === "pending" ? 2 :
+    (status === "awaiting_liveness" || status === "id_approved") ? 1 : 0;
   return (
     <ol className="flex items-center justify-between gap-2 px-1">
       {steps.map((s, i) => {
@@ -168,9 +169,10 @@ function PendingPanel({ verif }: { verif: VerifRow }) {
         <div className="mx-auto h-12 w-12 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 grid place-items-center mb-3">
           <Loader2 className="h-6 w-6 animate-spin" />
         </div>
-        <h2 className="font-semibold">Pending admin approval</h2>
+        <h2 className="font-semibold">Pending admin review</h2>
         <p className="text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
-          Your ID has been submitted. This page refreshes automatically once an admin reviews it.
+          Your ID details and liveness recording have been submitted. An admin will review the full package —
+          this page refreshes automatically once they decide.
         </p>
       </div>
 
