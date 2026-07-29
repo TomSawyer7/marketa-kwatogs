@@ -8,6 +8,7 @@ type AuthCtx = {
   loading: boolean;
   isVerified: boolean;
   isAdmin: boolean;
+  emailVerified: boolean;
   refreshStatus: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (
@@ -15,7 +16,7 @@ type AuthCtx = {
     password: string,
     firstName: string,
     lastName: string,
-  ) => Promise<{ error: string | null }>;
+  ) => Promise<{ error: string | null; needsEmailVerification?: boolean }>;
   resetPassword: (email: string) => Promise<{ error: string | null }>;
   updatePassword: (password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
@@ -121,6 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading,
         isVerified,
         isAdmin,
+        emailVerified: Boolean(user?.email_confirmed_at),
         refreshStatus,
         signIn,
         signUp,

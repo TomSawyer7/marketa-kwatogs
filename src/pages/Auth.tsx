@@ -40,7 +40,7 @@ const PUBLIC_PATHS = new Set(["/", "/auth", "/forgot-password", "/reset-password
 const Auth = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, loading, isVerified, isAdmin, signIn, signUp, refreshStatus } = useAuth();
+  const { user, loading, isVerified, isAdmin, emailVerified, signIn, signUp, refreshStatus } = useAuth();
   const [tab, setTab] = useState<"login" | "signup">("login");
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -56,9 +56,10 @@ const Auth = () => {
 
   const requestedFrom = (location.state as { from?: string } | null)?.from;
 
-  const destinationFor = (verified: boolean, admin: boolean) => {
-    if (admin || verified) {
-      // Honor the originally requested protected page if any, else go to marketplace.
+  const destinationFor = (verified: boolean, admin: boolean, emailOk: boolean) => {
+    if (admin) return "/admin";
+    if (!emailOk) return "/verify-email";
+    if (verified) {
       if (requestedFrom && !PUBLIC_PATHS.has(requestedFrom)) return requestedFrom;
       return "/browse";
     }
@@ -67,10 +68,10 @@ const Auth = () => {
 
   useEffect(() => {
     if (!loading && user) {
-      navigate(destinationFor(isVerified, isAdmin), { replace: true });
+      navigate(destinationFor(isVerified, isAdmin, emailVerified), { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, loading, isVerified, isAdmin, navigate]);
+  }, [user, loading, isVerified, isAdmin, emailVerified, navigate]);
 
   useEffect(() => {
     document.title = tab === "login" ? "Log in · Marketa" : "Sign up · Marketa";
@@ -128,9 +129,8 @@ const Auth = () => {
       toast.error(msg);
       return;
     }
-    toast.success("Account created! You can log in now.");
-    setTab("login");
-    setLogin({ email: parsed.data.email, password: "" });
+    toast.success("Account created! Check your email for a verification code.");
+    navigate("/verify-email", { state: { email: parsed.data.email } });
   };
 
   return (

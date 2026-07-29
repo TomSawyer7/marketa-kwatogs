@@ -20,6 +20,7 @@ import Auth from "./pages/Auth.tsx";
 import ForgotPassword from "./pages/ForgotPassword.tsx";
 import ResetPassword from "./pages/ResetPassword.tsx";
 import Verify from "./pages/Verify.tsx";
+import VerifyEmail from "./pages/VerifyEmail.tsx";
 import Admin from "./pages/Admin.tsx";
 import Transactions from "./pages/Transactions.tsx";
 import Inbox from "./pages/Inbox.tsx";
@@ -44,6 +45,7 @@ const App = () => (
                   <Route path="/auth" element={<Auth />} />
                   <Route path="/forgot-password" element={<ForgotPassword />} />
                   <Route path="/reset-password" element={<ResetPassword />} />
+                  <Route path="/verify-email" element={<VerifyEmail />} />
                   <Route path="/verify" element={<ProtectedRoute><Verify /></ProtectedRoute>} />
                   <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
                   <Route path="/item/:id" element={<ItemDetail />} />
