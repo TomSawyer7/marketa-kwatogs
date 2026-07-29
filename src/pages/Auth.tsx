@@ -51,7 +51,11 @@ const Auth = () => {
   const [tab, setTab] = useState<"login" | "signup">("login");
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [agreed, setAgreed] = useState(false);
+  const [termsAgreed, setTermsAgreed] = useState(false);
+  const [privacyAgreed, setPrivacyAgreed] = useState(false);
+  const [termsOpen, setTermsOpen] = useState(false);
+  const [privacyOpen, setPrivacyOpen] = useState(false);
+  const agreed = termsAgreed && privacyAgreed;
 
   const [login, setLogin] = useState({ email: "", password: "" });
   const [signup, setSignup] = useState({
