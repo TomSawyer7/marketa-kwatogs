@@ -20,6 +20,7 @@ import Auth from "./pages/Auth.tsx";
 import ForgotPassword from "./pages/ForgotPassword.tsx";
 import ResetPassword from "./pages/ResetPassword.tsx";
 import Verify from "./pages/Verify.tsx";
+import VerifyEmail from "./pages/VerifyEmail.tsx";
 import Admin from "./pages/Admin.tsx";
 import Transactions from "./pages/Transactions.tsx";
 import Inbox from "./pages/Inbox.tsx";
