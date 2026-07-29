@@ -65,6 +65,7 @@ export function ForgotMpinDialog({
       toast.error(error);
       return;
     }
+    setCode("");
     toast.success(`We sent a ${OTP_LENGTH}-digit code to your email.`);
     setResendIn(30);
     setStep("otp");
@@ -177,10 +178,11 @@ export function ForgotMpinDialog({
               <InputOTP
                 maxLength={OTP_LENGTH}
                 value={code}
-                onChange={setCode}
+                onChange={(v) => setCode(v.replace(/\D/g, "").slice(0, OTP_LENGTH))}
                 autoFocus
                 disabled={busy}
                 inputMode="numeric"
+                pattern="[0-9]*"
               >
                 <InputOTPGroup>
                   {Array.from({ length: OTP_LENGTH }).map((_, i) => (
