@@ -208,6 +208,7 @@ export function MpinProvider({ children }: { children: ReactNode }) {
       }
       ({ error } = await supabase.auth.reauthenticate());
     }
+    logEvent({ category: "auth", action: "mpin_reset_request", success: !error, failure_reason: error?.message });
     return { error: error ? error.message || "Could not send the code." : null };
   }, [user, ensureLiveSession]);
 
