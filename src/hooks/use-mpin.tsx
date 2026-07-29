@@ -64,8 +64,15 @@ export function MpinProvider({ children }: { children: ReactNode }) {
   const [unlocked, setUnlocked] = useState<MpinSection[]>([]);
 
   useEffect(() => {
+    if (!uid && typeof window !== "undefined") {
+      // signed out → drop every cached section unlock
+      Object.keys(window.sessionStorage)
+        .filter((k) => k.startsWith(STORAGE_KEY))
+        .forEach((k) => window.sessionStorage.removeItem(k));
+    }
     setUnlocked(readUnlocked(uid));
   }, [uid]);
+
 
   const refresh = useCallback(async () => {
     if (!uid) {
