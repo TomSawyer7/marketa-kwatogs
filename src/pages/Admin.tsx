@@ -98,6 +98,7 @@ const Admin = () => {
           <TabsList className="w-fit">
             <TabsTrigger value="verifications">Verifications</TabsTrigger>
             <TabsTrigger value="trust">Trust & safety</TabsTrigger>
+            <TabsTrigger value="audit">Audit logs</TabsTrigger>
           </TabsList>
 
           <TabsContent value="verifications" className="flex-1 flex flex-col min-h-0 mt-3">
