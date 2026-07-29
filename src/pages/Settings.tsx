@@ -57,8 +57,9 @@ const Settings = () => {
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const parsed = profileSchema.safeParse({
-      name: form.name, email: form.email, location: form.location, bio: form.bio,
+      email: form.email, location: form.location, bio: form.bio,
     });
+
     if (!parsed.success) {
       const fe: Record<string, string> = {};
       parsed.error.issues.forEach((iss) => {
