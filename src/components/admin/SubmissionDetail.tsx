@@ -75,7 +75,7 @@ export function SubmissionDetail({
     });
     setBusy(false);
     if (error) { toast.error(error.message); return; }
-    toast.success(action === "approve_id" ? "ID approved" : "Submission rejected");
+    toast.success(action === "approve_id" ? "User verified" : "Submission rejected");
     onChanged();
   };
 
