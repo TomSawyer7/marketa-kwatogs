@@ -146,6 +146,8 @@ export function IDVerification({ onSubmitted }: { onSubmitted: () => void }) {
   const [scanning, setScanning] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [certified, setCertified] = useState(false);
+
 
   const handlePick = (side: "front" | "back", file: File) => {
     if (!file.type.startsWith("image/")) {
