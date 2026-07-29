@@ -601,6 +601,7 @@ function Step2Liveness({ onPassed }: { onPassed: () => void }) {
   const resetAll = () => {
     stopAll();
     framesRef.current = [];
+    chunksRef.current = [];
     currentIdxRef.current = 0;
     blinkStateRef.current = { below: false, count: 0 };
     holdRef.current = 0;
