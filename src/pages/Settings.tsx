@@ -24,7 +24,7 @@ const profileSchema = z.object({
 const Settings = () => {
   const navigate = useNavigate();
   const { profile, updateProfile } = useMarketa();
-  const { user, signOut } = useAuth();
+  const { user, signOut, isVerified } = useAuth();
   const [form, setForm] = useState(profile);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
