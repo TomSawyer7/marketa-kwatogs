@@ -12,10 +12,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useMarketa } from "@/store/marketa";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
-import { Camera, ArrowLeft, LogOut, PauseCircle, Trash2 } from "lucide-react";
+import { Camera, ArrowLeft, LogOut, PauseCircle, Trash2, FileText, ShieldCheck, Users } from "lucide-react";
+import { Link } from "react-router-dom";
 import { useAccountLifecycle } from "@/hooks/use-account-lifecycle";
 import { DeactivateAccountDialog } from "@/components/account/DeactivateAccountDialog";
 import { DeleteAccountDialog } from "@/components/account/DeleteAccountDialog";
+import { LEGAL_VERSIONS } from "@/lib/legal-version";
 
 const profileSchema = z.object({
   email: z.string().trim().email("Enter a valid email").max(120),
