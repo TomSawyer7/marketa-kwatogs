@@ -164,7 +164,9 @@ export function MpinProvider({ children }: { children: ReactNode }) {
     if (!user?.email) return { error: "No email on this account." };
     const { error } = await supabase.auth.signInWithOtp({
       email: user.email,
-      options: { shouldCreateUser: false },
+      options: {
+        shouldCreateUser: false,
+      },
     });
     return { error: error ? error.message || "Could not send the code." : null };
   }, [user]);
