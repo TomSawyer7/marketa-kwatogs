@@ -10,6 +10,7 @@ import { StatsHeader } from "@/components/admin/StatsHeader";
 import { SubmissionList, type FilterKey, type ListItem } from "@/components/admin/SubmissionList";
 import { SubmissionDetail, type DetailItem } from "@/components/admin/SubmissionDetail";
 import { TrustPanel } from "@/components/admin/TrustPanel";
+import { AuditLogsWorkspace } from "@/components/admin/audit/AuditLogsWorkspace";
 
 const Admin = () => {
   const navigate = useNavigate();
