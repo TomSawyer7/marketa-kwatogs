@@ -12,10 +12,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useMarketa } from "@/store/marketa";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
-import { Camera, ArrowLeft, LogOut, PauseCircle, Trash2 } from "lucide-react";
+import { Camera, ArrowLeft, LogOut, PauseCircle, Trash2, FileText, ShieldCheck, Users } from "lucide-react";
+import { Link } from "react-router-dom";
 import { useAccountLifecycle } from "@/hooks/use-account-lifecycle";
 import { DeactivateAccountDialog } from "@/components/account/DeactivateAccountDialog";
 import { DeleteAccountDialog } from "@/components/account/DeleteAccountDialog";
+import { LEGAL_VERSIONS } from "@/lib/legal-version";
 
 const profileSchema = z.object({
   email: z.string().trim().email("Enter a valid email").max(120),
@@ -217,6 +219,45 @@ const Settings = () => {
             </Button>
           </section>
         )}
+
+        <section className="mt-6 bg-card border border-border rounded-lg p-5 md:p-6">
+          <h3 className="font-semibold text-lg">Legal</h3>
+          <p className="text-sm text-muted-foreground">
+            Review the documents you agreed to when you joined Marketa.
+          </p>
+          <div className="mt-4 grid gap-2 sm:grid-cols-3">
+            <Link
+              to="/legal/terms"
+              className="flex items-start gap-3 rounded-md border border-border p-3 hover:bg-secondary/40 transition-colors"
+            >
+              <FileText className="h-5 w-5 text-primary mt-0.5" />
+              <div>
+                <div className="font-medium text-sm">Terms &amp; Conditions</div>
+                <div className="text-xs text-muted-foreground">v{LEGAL_VERSIONS.terms}</div>
+              </div>
+            </Link>
+            <Link
+              to="/legal/privacy"
+              className="flex items-start gap-3 rounded-md border border-border p-3 hover:bg-secondary/40 transition-colors"
+            >
+              <ShieldCheck className="h-5 w-5 text-primary mt-0.5" />
+              <div>
+                <div className="font-medium text-sm">Privacy Policy</div>
+                <div className="text-xs text-muted-foreground">v{LEGAL_VERSIONS.privacy}</div>
+              </div>
+            </Link>
+            <Link
+              to="/legal/community"
+              className="flex items-start gap-3 rounded-md border border-border p-3 hover:bg-secondary/40 transition-colors"
+            >
+              <Users className="h-5 w-5 text-primary mt-0.5" />
+              <div>
+                <div className="font-medium text-sm">Community Guidelines</div>
+                <div className="text-xs text-muted-foreground">v{LEGAL_VERSIONS.community}</div>
+              </div>
+            </Link>
+          </div>
+        </section>
 
         {user && (
           <section className="mt-6 space-y-4">

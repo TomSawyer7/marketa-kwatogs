@@ -6,9 +6,12 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import PasswordStrengthMeter from "@/components/auth/PasswordStrengthMeter";
 import { useAuth } from "@/hooks/use-auth";
+import { recordAcceptance } from "@/lib/legal";
+import { supabase } from "@/integrations/supabase/client";
 
 const loginSchema = z.object({
   email: z.string().trim().email("Enter a valid email").max(120),
@@ -44,6 +47,7 @@ const Auth = () => {
   const [tab, setTab] = useState<"login" | "signup">("login");
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [agreed, setAgreed] = useState(false);
 
   const [login, setLogin] = useState({ email: "", password: "" });
   const [signup, setSignup] = useState({
@@ -115,6 +119,10 @@ const Auth = () => {
       setErrors(fe);
       return;
     }
+    if (!agreed) {
+      toast.error("You must agree to the Terms & Conditions and Privacy Policy.");
+      return;
+    }
     setErrors({});
     setBusy(true);
     const { error } = await signUp(
@@ -129,6 +137,18 @@ const Auth = () => {
       toast.error(msg);
       return;
     }
+    // Best-effort acceptance capture. If the session isn't live yet (email
+    // confirmation required), resolve the user id from getUser and record.
+    try {
+      const { data } = await supabase.auth.getUser();
+      const uid = data.user?.id ?? null;
+      if (uid) {
+        await Promise.all([
+          recordAcceptance("terms", "registration", uid),
+          recordAcceptance("privacy", "registration", uid),
+        ]);
+      }
+    } catch { /* noop */ }
     toast.success("Account created! Check your email for a verification code.");
     navigate("/verify-email", { state: { email: parsed.data.email } });
   };
@@ -239,7 +259,26 @@ const Auth = () => {
                   />
                   {errors.confirm && <p className="text-xs text-destructive mt-1">{errors.confirm}</p>}
                 </div>
-                <Button type="submit" className="w-full" disabled={busy}>
+                <label className="flex items-start gap-2 text-sm text-muted-foreground">
+                  <Checkbox
+                    id="signup-agree"
+                    checked={agreed}
+                    onCheckedChange={(v) => setAgreed(v === true)}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    I have read and agree to the{" "}
+                    <Link to="/legal/terms" target="_blank" rel="noopener noreferrer" className="text-primary underline">
+                      Terms &amp; Conditions
+                    </Link>{" "}
+                    and{" "}
+                    <Link to="/legal/privacy" target="_blank" rel="noopener noreferrer" className="text-primary underline">
+                      Privacy Policy
+                    </Link>
+                    .
+                  </span>
+                </label>
+                <Button type="submit" className="w-full" disabled={busy || !agreed}>
                   {busy ? "Creating account…" : "Create account"}
                 </Button>
               </form>

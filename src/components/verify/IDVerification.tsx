@@ -1,9 +1,11 @@
 import { useRef, useState } from "react";
 import { ArrowRight, CheckCircle2, Loader2, RefreshCw, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { recordAcceptance } from "@/lib/legal";
 
 /* ============================================================================
  * EXACT scanID logic — DO NOT MODIFY
@@ -144,6 +146,8 @@ export function IDVerification({ onSubmitted }: { onSubmitted: () => void }) {
   const [scanning, setScanning] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [certified, setCertified] = useState(false);
+
 
   const handlePick = (side: "front" | "back", file: File) => {
     if (!file.type.startsWith("image/")) {
@@ -181,6 +185,10 @@ export function IDVerification({ onSubmitted }: { onSubmitted: () => void }) {
 
   const handleConfirm = async () => {
     if (!extracted || !user || !front || !back) return;
+    if (!certified) {
+      toast.error("Please confirm the certification checkbox to submit.");
+      return;
+    }
     setConfirming(true);
     try {
       const ts = Date.now();
@@ -234,6 +242,7 @@ export function IDVerification({ onSubmitted }: { onSubmitted: () => void }) {
       if (vErr) throw vErr;
 
       // Profile stays is_verified: false until admin approves the full package.
+      void recordAcceptance("kyc_certification", "kyc", user.id);
       toast.success("ID saved. Next: the liveness check.");
       onSubmitted();
     } catch (e) {
@@ -280,11 +289,24 @@ export function IDVerification({ onSubmitted }: { onSubmitted: () => void }) {
 
         {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
 
-        <div className="mt-5 flex flex-col sm:flex-row gap-2">
+        <label className="mt-5 flex items-start gap-2 text-sm text-muted-foreground bg-secondary/30 border border-border rounded-md p-3">
+          <Checkbox
+            id="kyc-certify"
+            checked={certified}
+            onCheckedChange={(v) => setCertified(v === true)}
+            className="mt-0.5"
+          />
+          <span>
+            I certify that all information and identification documents I submitted are true,
+            accurate, complete, and belong to me.
+          </span>
+        </label>
+
+        <div className="mt-4 flex flex-col sm:flex-row gap-2">
           <Button variant="outline" className="flex-1" disabled={confirming} onClick={handleRetry}>
             <RefreshCw className="h-4 w-4 mr-2" /> Retry upload
           </Button>
-          <Button className="flex-1" disabled={confirming} onClick={handleConfirm}>
+          <Button className="flex-1" disabled={confirming || !certified} onClick={handleConfirm}>
             {confirming
               ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Submitting…</>
               : <><CheckCircle2 className="h-4 w-4 mr-2" /> Confirm details</>}
