@@ -56,9 +56,10 @@ const Auth = () => {
 
   const requestedFrom = (location.state as { from?: string } | null)?.from;
 
-  const destinationFor = (verified: boolean, admin: boolean) => {
-    if (admin || verified) {
-      // Honor the originally requested protected page if any, else go to marketplace.
+  const destinationFor = (verified: boolean, admin: boolean, emailOk: boolean) => {
+    if (admin) return "/admin";
+    if (!emailOk) return "/verify-email";
+    if (verified) {
       if (requestedFrom && !PUBLIC_PATHS.has(requestedFrom)) return requestedFrom;
       return "/browse";
     }
@@ -67,10 +68,10 @@ const Auth = () => {
 
   useEffect(() => {
     if (!loading && user) {
-      navigate(destinationFor(isVerified, isAdmin), { replace: true });
+      navigate(destinationFor(isVerified, isAdmin, emailVerified), { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, loading, isVerified, isAdmin, navigate]);
+  }, [user, loading, isVerified, isAdmin, emailVerified, navigate]);
 
   useEffect(() => {
     document.title = tab === "login" ? "Log in · Marketa" : "Sign up · Marketa";
