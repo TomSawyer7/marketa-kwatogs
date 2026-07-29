@@ -1,5 +1,12 @@
 project_id = "gsawquzxlrkraylbyitt"
 
+[auth.email]
+otp_length = 8
+
 [auth.email.template.magic_link]
 subject = "Your Marketa verification code"
 content_path = "./supabase/templates/magic_link.html"
+
+[auth.email.template.reauthentication]
+subject = "Your Marketa MPIN reset code"
+content_path = "./supabase/templates/reauthentication.html"

@@ -843,6 +843,7 @@ export type Database = {
       recalc_account_status: { Args: { _user_id: string }; Returns: undefined }
       set_mpin: { Args: { _mpin: string }; Returns: Json }
       verify_mpin: { Args: { _mpin: string }; Returns: Json }
+      verify_mpin_reset_otp: { Args: { _code: string }; Returns: Json }
     }
     Enums: {
       app_role: "admin" | "user"
