@@ -15,7 +15,7 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp
 import { useMpin } from "@/hooks/use-mpin";
 import { MpinInput, MPIN_LENGTH } from "./MpinInput";
 
-const OTP_LENGTH = 6;
+const OTP_LENGTH = 8;
 
 type Step = "password" | "otp" | "mpin";
 
