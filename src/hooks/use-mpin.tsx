@@ -30,6 +30,9 @@ type MpinCtx = {
   verify: (mpin: string, section?: MpinSection) => Promise<VerifyResult>;
   setMpin: (mpin: string) => Promise<{ error: string | null }>;
   reauthenticate: (password: string) => Promise<{ error: string | null }>;
+  sendResetOtp: () => Promise<{ error: string | null }>;
+  verifyResetOtp: (code: string) => Promise<{ error: string | null }>;
+  email: string | null;
 };
 
 const Ctx = createContext<MpinCtx | null>(null);
