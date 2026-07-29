@@ -10,7 +10,13 @@ import { useMpin } from "@/hooks/use-mpin";
  * - Logged in + verified but no MPIN: forced to /mpin-setup
  * - Logged in + verified + MPIN: pass-through
  */
-const ALWAYS_ALLOWED = ["/", "/auth", "/forgot-password", "/reset-password"];
+const ALWAYS_ALLOWED = [
+  "/",
+  "/auth",
+  "/forgot-password",
+  "/verify-reset-password",
+  "/create-new-password",
+];
 const VERIFY_PATH = "/verify";
 const VERIFY_EMAIL_PATH = "/verify-email";
 const MPIN_SETUP_PATH = "/mpin-setup";

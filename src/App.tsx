@@ -22,7 +22,8 @@ import Settings from "./pages/Settings.tsx";
 import SellerPage from "./pages/SellerPage.tsx";
 import Auth from "./pages/Auth.tsx";
 import ForgotPassword from "./pages/ForgotPassword.tsx";
-import ResetPassword from "./pages/ResetPassword.tsx";
+import VerifyResetPassword from "./pages/VerifyResetPassword.tsx";
+import CreateNewPassword from "./pages/CreateNewPassword.tsx";
 import Verify from "./pages/Verify.tsx";
 import VerifyEmail from "./pages/VerifyEmail.tsx";
 import Admin from "./pages/Admin.tsx";
@@ -55,7 +56,8 @@ const App = () => (
                     <Route path="/browse" element={<Browse />} />
                     <Route path="/auth" element={<Auth />} />
                     <Route path="/forgot-password" element={<ForgotPassword />} />
-                    <Route path="/reset-password" element={<ResetPassword />} />
+                    <Route path="/verify-reset-password" element={<VerifyResetPassword />} />
+                    <Route path="/create-new-password" element={<CreateNewPassword />} />
                     <Route path="/verify-email" element={<VerifyEmail />} />
                     <Route path="/verify" element={<ProtectedRoute><Verify /></ProtectedRoute>} />
                     <Route path="/mpin-setup" element={<ProtectedRoute><MpinSetup /></ProtectedRoute>} />
