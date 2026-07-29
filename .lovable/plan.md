@@ -1,66 +1,117 @@
-# Account Deactivation & Deletion
+# Secure Tamper-Resistant Audit Logging System
 
-Two distinct, clearly separated features in Settings, backed by one state table, RLS-based hiding, and a nightly scheduled job.
+Adds a background audit trail with hash-chained integrity, an admin dashboard, and export tooling — without touching existing auth, KYC, marketplace, or trust logic.
 
-## 1. Database
+## 1. Database (new migration, additive only)
 
-New table `public.account_lifecycle` (one row per user):
-- `user_id` (PK), `state` (`active` | `deactivated` | `pending_deletion` | `deleted`)
-- `deactivated_at`, `reactivate_at` (null = indefinite)
-- `deletion_requested_at`, `delete_after` (requested + 30 days)
-- `created_at`, `updated_at` + touch trigger
-- Grants: `authenticated` (own row read/write via RLS scoped to `auth.uid()`), `service_role` all. No `anon`.
+New table `public.audit_logs`:
 
-Helper function `public.is_account_hidden(_user_id uuid)` — `stable security definer`, returns true when state is `deactivated` or `pending_deletion`.
+- `id uuid pk`, `seq bigserial unique` (chain order, gap detection)
+- `timestamp timestamptz`, `created_at timestamptz`
+- `user_id uuid`, `user_role text`, `session_id text`, `correlation_id uuid`
+- `category text`, `action text`, `description text`
+- `entity_type text`, `entity_id text`
+- `ip_address inet`, `device text`, `browser text`, `operating_system text`
+- `endpoint text`, `http_method text`, `status_code int`, `success bool`, `failure_reason text`
+- `metadata jsonb` (sanitized; PII/secrets stripped)
+- `previous_hash text`, `current_hash text` (SHA-256 hex)
 
-RLS changes for marketplace hiding:
-- `listings` public SELECT policy becomes `NOT is_account_hidden(seller_id)` (owner and admins still see their own).
-- `profiles` public SELECT policy becomes `NOT is_account_hidden(id)`; owner/admin policies unchanged so the user can still use Settings.
-- Threads/messages/transactions untouched — existing counterparties keep their history.
+Indexes: `(timestamp desc)`, `(user_id, timestamp)`, `(category, action)`, `(correlation_id)`, `(success)`, GIN on metadata.
 
-Audit table `public.account_deletion_log`: `id`, `deleted_at`, `grace_started_at`, `had_kyc boolean`. No personal data, no user id link to a live person beyond the anonymized placeholder id. Admin-read only.
+RLS: admins read only (via `has_role`); no INSERT/UPDATE/DELETE grants to `anon`/`authenticated` — only `service_role` writes. UPDATE/DELETE revoked from everyone; a trigger raises on any UPDATE/DELETE as a second guard.
 
-RPCs (security definer, all validate `auth.uid()`):
-- `request_deactivation(_days int | null)` — sets state and `reactivate_at`.
-- `reactivate_account()` — clears deactivation, sets `active`.
-- `request_deletion()` — sets `pending_deletion`, `delete_after = now() + 30 days`.
-- `cancel_deletion()` — back to `active`.
-Client verifies MPIN/password/OTP before calling these (see below); the RPCs additionally require a fresh MPIN verification token check via `verify_mpin` result passed in as an argument, so they can't be called bare from the console.
+Chain: `SECURITY DEFINER` function `append_audit_log(payload jsonb)` runs inside a serializable transaction, takes an advisory lock, reads latest `current_hash`, computes `sha256(prev_hash || canonical_json(payload || seq || timestamp))`, inserts row. Only callable by `service_role`.
 
-## 2. Verification gates (reuse existing primitives)
+Verification function `verify_audit_chain(from_seq, to_seq)` recomputes hashes, returns `{ok, first_broken_seq, missing_seqs[]}`.
 
-- Deactivate: `verify_mpin` RPC + `signInWithPassword` re-auth (existing `reauthenticate` in `use-mpin`). No OTP.
-- Delete: MPIN + password + 8-digit email OTP using the exact existing Forgot-MPIN path (`supabase.auth.reauthenticate()` to send, `verify_mpin_reset_otp` RPC to check) so the session is never replaced.
+Additive `public.audit_categories` / `audit_actions` enums-as-text (no enum type to keep migrations cheap).
 
-## 3. Settings UI
+## 2. Logging service
 
-New section "Account management" at the bottom of `src/pages/Settings.tsx`, two visually distinct cards:
-- **Deactivate (amber/neutral)** — explains: profile and listings hidden, nothing deleted, reversible any time. Duration select: 7 / 30 / 90 days / Indefinite. Opens `DeactivateAccountDialog` (MPIN → password → confirm).
-- **Delete permanently (destructive)** — explains: 30-day grace period, then personal data anonymized and KYC/liveness files erased; transaction history is retained under "Deleted User". Opens `DeleteAccountDialog` (MPIN → password → email OTP → typed "DELETE" confirmation).
+New Edge Function `audit-log` (verify_jwt=false, validates JWT in code):
 
-New components: `src/components/account/DeactivateAccountDialog.tsx`, `DeleteAccountDialog.tsx`, `AccountLifecycleBanner.tsx`.
+- Accepts a batch of events from the client, enriches with IP (from `x-forwarded-for`), UA parsing (browser/OS/device), role lookup, session id from JWT.
+- Sanitizes payload: strips `password`, `mpin`, `otp`, `token`, `access_token`, `refresh_token`, `authorization` keys recursively.
+- Calls `append_audit_log` per event under service role.
+- Rate-limited per user to prevent flooding.
 
-## 4. Login-time prompts
+Second Edge Function `admin-audit` (admin-only):
 
-New hook `use-account-lifecycle.ts` + a banner rendered in `AppShell`:
-- `deactivated` → "Your account is deactivated until {date}. Reactivate now?" with a one-click reactivate button.
-- `pending_deletion` → countdown "Your account will be permanently deleted in N days" + "Cancel deletion request".
-Deactivated / pending-deletion users can still sign in and reach Settings; other marketplace routes show the banner with the reactivate call to action.
+- `list` with filters (date range, user, category, action, success, search), pagination, sorting.
+- `get` single row.
+- `verify` runs chain verification.
+- `export` returns CSV / XLSX / PDF (server-side generation with `xlsx` + `pdf-lib` via npm: specifiers).
 
-## 5. Scheduled processing
+Server-side triggers write logs directly (bypassing HTTP) for DB-driven events:
 
-Edge function `supabase/functions/account-lifecycle-cron/index.ts` (service role, no JWT trust — protected by a shared `CRON_SECRET` header):
-1. Auto-reactivate: rows with `state='deactivated'` and `reactivate_at <= now()` → `active`.
-2. Finalize deletion: rows with `state='pending_deletion'` and `delete_after <= now()`:
-   - Anonymize `profiles`: name → `Deleted User`, first/last name, email, bio, location, avatar_url → null; mark `is_verified=false`.
-   - Delete rows from `verified_users` and `verifications` (all extracted KYC/OCR fields), and `user_mpins`.
-   - Remove storage objects for that user from `id-documents`, `liveness-media`, `avatars`, `appeal-evidence`.
-   - Anonymize auth user email/phone via admin API (`admin.updateUserById` to a non-routable placeholder) and ban the account; **do not** delete the auth user, so all FKs on transactions/reviews/threads stay intact.
-   - Keep `listings`, `transactions`, `reviews`, `messages` rows as-is, now attributed to the placeholder profile.
-   - Set state `deleted`, insert one `account_deletion_log` row.
+- `AFTER INSERT` on `verifications`, `reviews`, `listings`, `transactions`, `messages`, `threads`, `review_appeals`, `account_lifecycle`, `user_roles`, `account_status` → trigger calls `append_audit_log` with a category/action derived from `TG_TABLE_NAME` + `TG_OP` + relevant columns. This captures profile updates, listing CRUD, transaction state changes, trust adjustments, appeals, role changes, suspensions — automatically, without touching app code.
 
-Scheduled daily via `pg_cron` + `pg_net` (`select cron.schedule(...)` run through the insert tool, since it embeds the project URL and key).
+## 3. Client-side capture (minimal, non-invasive)
 
-## Integrity notes
+New `src/lib/audit.ts` with `logEvent(category, action, meta?)` that:
 
-Nothing is hard-deleted from the relational history — only the raw files and identifying fields. Counterparties keep full transaction/order/review records; those records now display "Deleted User". `CRON_SECRET` will be added as a secret before the function is written.
+- Debounces + batches events (2s / 20 events), stores queue in memory + `sessionStorage` for crash safety.
+- Posts to `audit-log` edge function with the current access token.
+- Fire-and-forget; failures never block UI.
+
+Central hooks — small additions inside existing files (no behavior change):
+
+- `use-auth.tsx`: log register, login success/failure, logout, password reset request/success, session expiration (via `onAuthStateChange`).
+- `use-mpin.tsx`: log MPIN create/verify/success/failure, reset request/success.
+- `VerifyEmail.tsx`: OTP sent/verified/failed.
+- `ProtectedRoute.tsx` / `VerificationGate.tsx`: route access denial, unauthorized attempts.
+- Admin actions in `Admin.tsx` / `admin-verification-action` / `TrustPanel` / appeal resolution: approvals, rejections, suspensions, manual trust adjustments (server-side trigger covers most; edge function adds admin-actor context).
+
+Client hooks call `logEvent`; no existing logic changes.
+
+## 4. Admin dashboard
+
+New route `/admin/audit-logs` (added under existing Admin page as a new tab "Audit Logs" alongside Verifications and Trust & Safety, matching current design).
+
+Components (new, under `src/components/admin/audit/`):
+
+- `AuditFilters.tsx` — search bar, date range picker, user picker, category/action selects, success/failure toggle.
+- `AuditTable.tsx` — responsive table: Timestamp, User, Event, Category, Status, IP, Device, Resource, Actions. Pagination, sorting, loading + empty states.
+- `AuditDetailDialog.tsx` — modal with every field including `previous_hash`/`current_hash`/`seq`.
+- `IntegrityVerifyDialog.tsx` — button "Verify Log Integrity", shows result banner ("Verified" / "Failed") and lists affected `seq` values.
+- `ExportMenu.tsx` — CSV / Excel / PDF, respects current filters.
+
+Uses existing shadcn primitives, tokens, and layout.
+
+## 5. Security
+
+- Only admins can call `admin-audit`; enforced by role check in the function.
+- Audit table has zero UI-driven UPDATE/DELETE paths; DB triggers raise on any modification.
+- Exports sanitize the same fields as ingestion.
+- Log injection protection: all string fields length-capped, control chars stripped, no template interpolation into HTML in dashboard (React handles escaping).
+- No secrets (`password`, `mpin`, `otp`, tokens) ever accepted into `metadata`.
+
+## Technical details
+
+- Hash: `sha256(previous_hash + '|' + seq + '|' + canonical_json_sorted(row_minus_hashes))` — canonical JSON with sorted keys ensures deterministic recomputation.
+- Genesis hash: `'0'.repeat(64)` for `seq = 1`.
+- Concurrency: `pg_advisory_xact_lock(hashtext('audit_logs_chain'))` inside `append_audit_log` serializes chain writes; batching amortizes lock cost.
+- UA parsing via `ua-parser-js` (npm: specifier in Deno).
+- Exports: `xlsx` (SheetJS) for CSV+XLSX, `pdf-lib` for PDF.
+- Zero changes to existing tables, RLS policies, or functions.
+
+## Out of scope
+
+- Backfill of historical events (chain starts from deployment).
+- External SIEM shipping (can be added later behind the same service).
+
+## Files
+
+New:
+- `supabase/migrations/<ts>_audit_logs.sql`
+- `supabase/functions/audit-log/index.ts`
+- `supabase/functions/admin-audit/index.ts`
+- `src/lib/audit.ts`
+- `src/components/admin/audit/{AuditFilters,AuditTable,AuditDetailDialog,IntegrityVerifyDialog,ExportMenu}.tsx`
+- `src/pages/AdminAuditLogs.tsx` (or new tab section inside `Admin.tsx`)
+
+Edited (log calls only, no behavior change):
+- `src/hooks/use-auth.tsx`, `src/hooks/use-mpin.tsx`
+- `src/pages/VerifyEmail.tsx`
+- `src/components/auth/ProtectedRoute.tsx`, `src/components/auth/VerificationGate.tsx`
+- `src/pages/Admin.tsx` (add tab)
