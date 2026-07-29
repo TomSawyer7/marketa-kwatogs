@@ -165,12 +165,43 @@ export function MpinProvider({ children }: { children: ReactNode }) {
     [user],
   );
 
+  // Ensures the locally stored session is still valid on the server before we
+  // hit /reauthenticate. A stale token (session replaced by a previous OTP
+  // sign-in) is what produces "Auth session missing!" / 403 session_not_found.
+  const ensureLiveSession = useCallback(async () => {
+    const { data } = await supabase.auth.getSession();
+    if (!data.session) return false;
+    const expiresAt = (data.session.expires_at ?? 0) * 1000;
+    if (expiresAt - Date.now() < 60_000) {
+      const { data: refreshed } = await supabase.auth.refreshSession();
+      return !!refreshed.session;
+    }
+    return true;
+  }, []);
+
+  // SENDING: never use signInWithOtp here — it issues a magic-link/new session
+  // and clobbers the session of the already-logged-in user. reauthenticate()
+  // emails a code-only token bound to the CURRENT session.
   const sendResetOtp = useCallback(async () => {
     if (!user?.email) return { error: "No email on this account." };
-    const { error } = await supabase.auth.reauthenticate();
+    if (!(await ensureLiveSession())) {
+      return { error: "Your session expired. Please sign in again." };
+    }
+    let { error } = await supabase.auth.reauthenticate();
+    if (error) {
+      // One retry after a forced refresh covers a token revoked server-side.
+      const { data: refreshed } = await supabase.auth.refreshSession();
+      if (!refreshed.session) {
+        return { error: "Your session expired. Please sign in again." };
+      }
+      ({ error } = await supabase.auth.reauthenticate());
+    }
     return { error: error ? error.message || "Could not send the code." : null };
-  }, [user]);
+  }, [user, ensureLiveSession]);
 
+  // VERIFYING: no supabase.auth.verifyOtp() — that would mint a replacement
+  // session. The code is checked server-side against the current user's
+  // reauthentication_token, so the existing session is left untouched.
   const verifyResetOtp = useCallback(
     async (code: string) => {
       if (!user?.email) return { error: "No email on this account." };
@@ -181,6 +212,7 @@ export function MpinProvider({ children }: { children: ReactNode }) {
     },
     [user],
   );
+
 
   const value = useMemo(
     () => ({
