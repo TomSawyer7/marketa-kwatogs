@@ -10,6 +10,7 @@ import { StatsHeader } from "@/components/admin/StatsHeader";
 import { SubmissionList, type FilterKey, type ListItem } from "@/components/admin/SubmissionList";
 import { SubmissionDetail, type DetailItem } from "@/components/admin/SubmissionDetail";
 import { TrustPanel } from "@/components/admin/TrustPanel";
+import { AuditLogsWorkspace } from "@/components/admin/audit/AuditLogsWorkspace";
 
 const Admin = () => {
   const navigate = useNavigate();
@@ -97,6 +98,7 @@ const Admin = () => {
           <TabsList className="w-fit">
             <TabsTrigger value="verifications">Verifications</TabsTrigger>
             <TabsTrigger value="trust">Trust & safety</TabsTrigger>
+            <TabsTrigger value="audit">Audit logs</TabsTrigger>
           </TabsList>
 
           <TabsContent value="verifications" className="flex-1 flex flex-col min-h-0 mt-3">
@@ -134,6 +136,10 @@ const Admin = () => {
 
           <TabsContent value="trust" className="mt-3">
             <TrustPanel />
+          </TabsContent>
+
+          <TabsContent value="audit" className="mt-3">
+            <AuditLogsWorkspace />
           </TabsContent>
         </Tabs>
       </div>

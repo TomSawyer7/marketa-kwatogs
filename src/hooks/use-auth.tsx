@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { logEvent } from "@/lib/audit";
 
 type AuthCtx = {
   user: User | null;
@@ -68,6 +69,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
+    logEvent({
+      category: "auth",
+      action: error ? "login_failure" : "login_success",
+      success: !error,
+      failure_reason: error?.message,
+      metadata: { email },
+    });
     return { error: error?.message ?? null };
   }, []);
 
@@ -87,12 +95,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           },
         },
       });
-      if (error) return { error: error.message };
+      if (error) {
+        logEvent({ category: "auth", action: "register_failure", success: false, failure_reason: error.message, metadata: { email } });
+        return { error: error.message };
+      }
       // With "User Enumeration Protection" enabled, Supabase returns a fake
       // user with an empty identities array when the email is already taken.
       if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+        logEvent({ category: "auth", action: "register_failure", success: false, failure_reason: "email_exists", metadata: { email } });
         return { error: "That email is already registered." };
       }
+      logEvent({ category: "auth", action: "register", metadata: { email } });
       return { error: null };
     },
     [],
@@ -102,15 +115,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/reset-password`,
     });
+    logEvent({ category: "auth", action: "password_reset_request", success: !error, failure_reason: error?.message, metadata: { email } });
     return { error: error?.message ?? null };
   }, []);
 
   const updatePassword = useCallback(async (password: string) => {
     const { error } = await supabase.auth.updateUser({ password });
+    logEvent({ category: "auth", action: "password_reset_success", success: !error, failure_reason: error?.message });
     return { error: error?.message ?? null };
   }, []);
 
   const signOut = useCallback(async () => {
+    logEvent({ category: "auth", action: "logout" });
     await supabase.auth.signOut();
   }, []);
 

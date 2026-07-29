@@ -9,6 +9,7 @@ import {
 } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { logEvent } from "@/lib/audit";
 
 export type MpinSection = "inbox" | "sell" | "settings";
 
@@ -129,6 +130,7 @@ export function MpinProvider({ children }: { children: ReactNode }) {
     async (mpin: string, section?: MpinSection): Promise<VerifyResult> => {
       const { data, error } = await supabase.rpc("verify_mpin", { _mpin: mpin });
       if (error) {
+        logEvent({ category: "auth", action: "mpin_verify_failure", success: false, failure_reason: error.message });
         return { ok: false, has_mpin: true, locked: false, attempts_left: 0 };
       }
       const result = data as unknown as VerifyResult;
@@ -138,6 +140,12 @@ export function MpinProvider({ children }: { children: ReactNode }) {
         attempts_left: result.attempts_left,
       });
       if (result.ok && section) unlock(section);
+      logEvent({
+        category: "auth",
+        action: result.ok ? "mpin_verify_success" : (result.locked ? "account_lockout" : "mpin_verify_failure"),
+        success: result.ok,
+        metadata: { section, attempts_left: result.attempts_left },
+      });
       return result;
     },
     [unlock],
@@ -146,7 +154,11 @@ export function MpinProvider({ children }: { children: ReactNode }) {
   const setMpin = useCallback(
     async (mpin: string) => {
       const { error } = await supabase.rpc("set_mpin", { _mpin: mpin });
-      if (error) return { error: error.message };
+      if (error) {
+        logEvent({ category: "auth", action: "mpin_create_failure", success: false, failure_reason: error.message });
+        return { error: error.message };
+      }
+      logEvent({ category: "auth", action: "mpin_create" });
       await refresh();
       return { error: null };
     },
@@ -196,6 +208,7 @@ export function MpinProvider({ children }: { children: ReactNode }) {
       }
       ({ error } = await supabase.auth.reauthenticate());
     }
+    logEvent({ category: "auth", action: "mpin_reset_request", success: !error, failure_reason: error?.message });
     return { error: error ? error.message || "Could not send the code." : null };
   }, [user, ensureLiveSession]);
 
@@ -206,8 +219,17 @@ export function MpinProvider({ children }: { children: ReactNode }) {
     async (code: string) => {
       if (!user?.email) return { error: "No email on this account." };
       const { data, error } = await supabase.rpc("verify_mpin_reset_otp", { _code: code });
-      if (error) return { error: error.message || "Invalid or expired code." };
+      if (error) {
+        logEvent({ category: "auth", action: "mpin_reset_failure", success: false, failure_reason: error.message });
+        return { error: error.message || "Invalid or expired code." };
+      }
       const result = data as MpinResetOtpResult;
+      logEvent({
+        category: "auth",
+        action: result.ok ? "mpin_reset_success" : "mpin_reset_failure",
+        success: !!result.ok,
+        failure_reason: result.ok ? undefined : result.message,
+      });
       return { error: result.ok ? null : result.message || "Invalid or expired code." };
     },
     [user],
