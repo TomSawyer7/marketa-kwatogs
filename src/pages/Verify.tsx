@@ -327,11 +327,27 @@ function Step2Liveness({ onPassed }: { onPassed: () => void }) {
     return c.toDataURL("image/jpeg", 0.82);
   };
 
+  const stopRecording = (): Promise<Blob | null> =>
+    new Promise((resolve) => {
+      const rec = recorderRef.current;
+      if (!rec || rec.state === "inactive") { resolve(null); return; }
+      rec.onstop = () => {
+        const blob = chunksRef.current.length
+          ? new Blob(chunksRef.current, { type: rec.mimeType || "video/webm" })
+          : null;
+        recorderRef.current = null;
+        resolve(blob);
+      };
+      try { rec.stop(); } catch { resolve(null); }
+    });
+
   const stopAll = () => {
     if (frameTimerRef.current) {
       window.clearInterval(frameTimerRef.current);
       frameTimerRef.current = null;
     }
+    try { recorderRef.current?.state !== "inactive" && recorderRef.current?.stop(); } catch { /* ignore */ }
+    recorderRef.current = null;
     try { cameraRef.current?.stop?.(); } catch { /* ignore */ }
     cameraRef.current = null;
     try { faceMeshRef.current?.close?.(); } catch { /* ignore */ }
