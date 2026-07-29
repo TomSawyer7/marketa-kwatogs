@@ -185,18 +185,18 @@ Deno.serve(async (req) => {
 
     const result = JSON.parse(toolCall.function.arguments);
     const passed = result.liveness_passed === true && Number(result.face_match_score) >= 90;
-    const newStatus = passed ? "verified" : "id_approved";
+    // Liveness no longer auto-verifies: on success the package moves to admin review.
+    const newStatus = passed ? "pending" : "awaiting_liveness";
 
     await admin.from("verifications").update({
       liveness_passed: result.liveness_passed === true,
       face_match_score: Number(result.face_match_score) || 0,
+      liveness_video_path: body.video_path ?? null,
+      liveness_frame_paths: Array.isArray(body.frame_paths) ? body.frame_paths : [],
+      liveness_checked_at: new Date().toISOString(),
       status: newStatus,
-      verified_at: passed ? new Date().toISOString() : null,
+      verified_at: null,
     }).eq("user_id", user.id);
-
-    if (passed) {
-      await admin.from("profiles").update({ is_verified: true }).eq("id", user.id);
-    }
 
     return new Response(JSON.stringify({
       ok: true,
@@ -204,7 +204,7 @@ Deno.serve(async (req) => {
       liveness_passed: result.liveness_passed === true,
       face_match_score: Number(result.face_match_score) || 0,
       reason: passed
-        ? "Identity verified."
+        ? "Liveness passed. An admin will review your ID and recording."
         : (result.liveness_reason || result.face_match_reason || "Verification did not meet the threshold. Please retry."),
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
