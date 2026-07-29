@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode, useCallback 
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { logEvent } from "@/lib/audit";
+import { checkLoginLock, registerLoginAttempt, formatLockDuration } from "@/lib/behavior";
 
 type AuthCtx = {
   user: User | null;
