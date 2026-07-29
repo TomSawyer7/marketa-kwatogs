@@ -143,6 +143,10 @@ const Admin = () => {
           <TabsContent value="audit" className="mt-3">
             <AuditLogsWorkspace />
           </TabsContent>
+
+          <TabsContent value="behavior" className="mt-3">
+            <BehaviorMonitoringWorkspace />
+          </TabsContent>
         </Tabs>
       </div>
     </div>
