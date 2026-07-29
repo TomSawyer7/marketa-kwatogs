@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { KeyRound, Lock, Mail, Send } from "lucide-react";
 import {
@@ -36,6 +36,7 @@ export function ForgotMpinDialog({
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
   const [resendIn, setResendIn] = useState(0);
+  const autoSentRef = useRef(false);
 
   useEffect(() => {
     if (resendIn <= 0) return;
@@ -51,6 +52,7 @@ export function ForgotMpinDialog({
       setPin("");
       setConfirm("");
       setResendIn(0);
+      autoSentRef.current = false;
     }
     onOpenChange(v);
   };
@@ -70,6 +72,13 @@ export function ForgotMpinDialog({
     setResendIn(30);
     setStep("otp");
   };
+
+  useEffect(() => {
+    if (!open || step !== "send" || autoSentRef.current) return;
+    autoSentRef.current = true;
+    void onSendCode();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, step]);
 
   const onPassword = async (e: FormEvent) => {
     e.preventDefault();
