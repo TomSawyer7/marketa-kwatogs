@@ -442,9 +442,44 @@ function Step2Liveness({ onPassed }: { onPassed: () => void }) {
     const actionKey = actionKeyFor(firstKey);
     const frames = framesRef.current.slice();
 
+    // Stop and upload the recording + frames so the admin can review the footage.
+    const videoBlob = await stopRecording();
+    let videoPath: string | null = null;
+    const framePaths: string[] = [];
+
+    if (user) {
+      const ts = Date.now();
+      try {
+        if (videoBlob && videoBlob.size > 0) {
+          const ext = (videoBlob.type || "").includes("mp4") ? "mp4" : "webm";
+          const path = `${user.id}/${ts}-liveness.${ext}`;
+          const up = await supabase.storage.from("liveness-media").upload(path, videoBlob, {
+            contentType: videoBlob.type || "video/webm",
+            upsert: true,
+          });
+          if (!up.error) videoPath = path;
+          else console.error("liveness video upload failed", up.error);
+        }
+
+        const uploads = await Promise.all(
+          frames.map(async (f, i) => {
+            const path = `${user.id}/${ts}-frame-${String(i).padStart(2, "0")}.jpg`;
+            const { error } = await supabase.storage.from("liveness-media").upload(path, dataUrlToBlob(f), {
+              contentType: "image/jpeg",
+              upsert: true,
+            });
+            return error ? null : path;
+          }),
+        );
+        uploads.forEach((p) => { if (p) framePaths.push(p); });
+      } catch (e) {
+        console.error("liveness media upload error", e);
+      }
+    }
+
     try {
       const { data, error } = await supabase.functions.invoke("verify-liveness", {
-        body: { action: actionKey, frames },
+        body: { action: actionKey, frames, video_path: videoPath, frame_paths: framePaths },
       });
       if (error) {
         const msg = (data as { error?: string } | undefined)?.error ?? error.message ?? "Verification failed.";
