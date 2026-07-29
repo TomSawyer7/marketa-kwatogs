@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Lock, PauseCircle } from "lucide-react";
 import {
@@ -46,6 +46,8 @@ export function DeactivateAccountDialog({
   const [pin, setPin] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  // keep the verified MPIN around for the server-side re-check in the RPC
+  const pinRef = useRef("");
 
   const close = (v: boolean) => {
     if (!v) {
@@ -79,14 +81,6 @@ export function DeactivateAccountDialog({
       toast.error(auth.error);
       return;
     }
-    // MPIN is re-checked server-side by the RPC.
-    const mpinRes = await verify(pinRef.current);
-    if (!mpinRes.ok) {
-      setBusy(false);
-      toast.error("Please re-enter your MPIN.");
-      setStep("mpin");
-      return;
-    }
     const days = duration === "indefinite" ? null : Number(duration);
     const { error } = await deactivate(pinRef.current, days);
     setBusy(false);
@@ -97,9 +91,6 @@ export function DeactivateAccountDialog({
     toast.success("Your account is now deactivated.");
     close(false);
   };
-
-  // keep the verified MPIN around for the server-side re-check
-  const pinRef = useRef("");
 
   return (
     <Dialog open={open} onOpenChange={close}>
