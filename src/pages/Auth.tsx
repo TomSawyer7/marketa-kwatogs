@@ -267,29 +267,55 @@ const Auth = () => {
                   />
                   {errors.confirm && <p className="text-xs text-destructive mt-1">{errors.confirm}</p>}
                 </div>
-                <label className="flex items-start gap-2 text-sm text-muted-foreground">
+                <div className="flex items-start gap-2 text-sm text-muted-foreground">
                   <Checkbox
                     id="signup-agree"
                     checked={agreed}
-                    onCheckedChange={(v) => setAgreed(v === true)}
+                    disabled
+                    aria-readonly
                     className="mt-0.5"
                   />
                   <span>
                     I have read and agree to the{" "}
-                    <Link to="/legal/terms" target="_blank" rel="noopener noreferrer" className="text-primary underline">
+                    <button
+                      type="button"
+                      onClick={() => setTermsOpen(true)}
+                      className="text-primary underline hover:no-underline"
+                    >
                       Terms &amp; Conditions
-                    </Link>{" "}
+                    </button>
+                    {termsAgreed && <span className="text-primary"> ✓</span>}{" "}
                     and{" "}
-                    <Link to="/legal/privacy" target="_blank" rel="noopener noreferrer" className="text-primary underline">
+                    <button
+                      type="button"
+                      onClick={() => setPrivacyOpen(true)}
+                      className="text-primary underline hover:no-underline"
+                    >
                       Privacy Policy
-                    </Link>
+                    </button>
+                    {privacyAgreed && <span className="text-primary"> ✓</span>}
                     .
                   </span>
-                </label>
+                </div>
                 <Button type="submit" className="w-full" disabled={busy || !agreed}>
                   {busy ? "Creating account…" : "Create account"}
                 </Button>
               </form>
+
+              <LegalAgreementModal
+                open={termsOpen}
+                onOpenChange={setTermsOpen}
+                doc={termsDoc}
+                version={LEGAL_VERSIONS.terms}
+                onAgree={() => setTermsAgreed(true)}
+              />
+              <LegalAgreementModal
+                open={privacyOpen}
+                onOpenChange={setPrivacyOpen}
+                doc={privacyDoc}
+                version={LEGAL_VERSIONS.privacy}
+                onAgree={() => setPrivacyAgreed(true)}
+              />
             </TabsContent>
           </Tabs>
           
