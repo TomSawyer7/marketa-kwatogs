@@ -31,6 +31,10 @@ import Inbox from "./pages/Inbox.tsx";
 import ChatThread from "./pages/ChatThread.tsx";
 import MpinSetup from "./pages/MpinSetup.tsx";
 import NotFound from "./pages/NotFound.tsx";
+import Terms from "./pages/legal/Terms.tsx";
+import Privacy from "./pages/legal/Privacy.tsx";
+import Community from "./pages/legal/Community.tsx";
+import Contact from "./pages/Contact.tsx";
 
 const queryClient = new QueryClient();
 
@@ -65,6 +69,10 @@ const App = () => (
                     <Route path="/settings" element={<ProtectedRoute><MpinGate section="settings"><Settings /></MpinGate></ProtectedRoute>} />
                     <Route path="/inbox" element={<ProtectedRoute><MpinGate section="inbox"><Inbox /></MpinGate></ProtectedRoute>} />
                     <Route path="/inbox/:id" element={<ProtectedRoute><MpinGate section="inbox"><ChatThread /></MpinGate></ProtectedRoute>} />
+                    <Route path="/legal/terms" element={<Terms />} />
+                    <Route path="/legal/privacy" element={<Privacy />} />
+                    <Route path="/legal/community" element={<Community />} />
+                    <Route path="/contact" element={<Contact />} />
                     {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                     <Route path="*" element={<NotFound />} />
                   </Routes>
