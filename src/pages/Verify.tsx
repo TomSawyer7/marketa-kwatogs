@@ -270,13 +270,38 @@ function actionKeyFor(c: ChallengeKey): "blink" | "turn_head" | "smile" {
   return "turn_head";
 }
 
+function pickMimeType(): string {
+  const candidates = [
+    "video/webm;codecs=vp9",
+    "video/webm;codecs=vp8",
+    "video/webm",
+    "video/mp4",
+  ];
+  for (const c of candidates) {
+    if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(c)) return c;
+  }
+  return "";
+}
+
+function dataUrlToBlob(dataUrl: string): Blob {
+  const [head, b64] = dataUrl.split(",");
+  const mime = head.match(/data:([^;]+)/)?.[1] ?? "image/jpeg";
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
+
 function Step2Liveness({ onPassed }: { onPassed: () => void }) {
+  const { user } = useAuth();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const faceMeshRef = useRef<any>(null);
   const cameraRef = useRef<any>(null);
   const framesRef = useRef<string[]>([]);
   const frameTimerRef = useRef<number | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
   const currentIdxRef = useRef(0);
   const blinkStateRef = useRef({ below: false, count: 0 });
   const holdRef = useRef(0);
