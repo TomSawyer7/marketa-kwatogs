@@ -202,7 +202,7 @@ export function IDVerification({ onSubmitted }: { onSubmitted: () => void }) {
 
       const { error: vErr } = await supabase.from("verifications").upsert({
         user_id: user.id,
-        status: "pending",
+        status: "awaiting_liveness",
         id_front_path: frontPath,
         id_back_path: backPath,
         ocr_full_name: extracted.full_name || null,
@@ -224,14 +224,17 @@ export function IDVerification({ onSubmitted }: { onSubmitted: () => void }) {
         everify_status: "not_checked",
         liveness_passed: false,
         face_match_score: null,
+        liveness_video_path: null,
+        liveness_frame_paths: [],
+        liveness_checked_at: null,
         admin_notes: null,
         submitted_at: new Date().toISOString(),
       }, { onConflict: "user_id" });
 
       if (vErr) throw vErr;
 
-      // Profile stays is_verified: false until admin approves.
-      toast.success("Submitted! Awaiting admin approval.");
+      // Profile stays is_verified: false until admin approves the full package.
+      toast.success("ID saved. Next: the liveness check.");
       onSubmitted();
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Could not submit.";

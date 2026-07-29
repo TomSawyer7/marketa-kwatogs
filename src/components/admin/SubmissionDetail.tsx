@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, XCircle, Loader2, ExternalLink, Copy, QrCode, ShieldCheck, User, FileText } from "lucide-react";
+import { CheckCircle2, XCircle, Loader2, ExternalLink, Copy, QrCode, ShieldCheck, User, FileText, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
@@ -28,6 +28,9 @@ export type DetailItem = {
   ocr_date_of_issue: string | null;
   face_match_score: number | null;
   liveness_passed: boolean | null;
+  liveness_video_path: string | null;
+  liveness_frame_paths: string[] | null;
+  liveness_checked_at: string | null;
   admin_notes: string | null;
   submitted_at: string;
   verified_at: string | null;
@@ -44,7 +47,7 @@ export function SubmissionDetail({
   item: DetailItem;
   onChanged: () => void;
 }) {
-  const [signed, setSigned] = useState<{ front?: string; back?: string }>({});
+  const [signed, setSigned] = useState<{ front?: string; back?: string; liveness_video?: string | null; liveness_frames?: string[] }>({});
   const [busy, setBusy] = useState(false);
   const [notes, setNotes] = useState(item.admin_notes ?? "");
 
@@ -59,8 +62,8 @@ export function SubmissionDetail({
       });
       if (cancelled) return;
       if (error) { toast.error(error.message); return; }
-      const d = data as { front: string; back: string };
-      setSigned({ front: d.front, back: d.back });
+      const d = data as { front: string; back: string; liveness_video: string | null; liveness_frames: string[] };
+      setSigned({ front: d.front, back: d.back, liveness_video: d.liveness_video, liveness_frames: d.liveness_frames ?? [] });
     })();
     return () => { cancelled = true; };
   }, [item.user_id]);
@@ -72,7 +75,7 @@ export function SubmissionDetail({
     });
     setBusy(false);
     if (error) { toast.error(error.message); return; }
-    toast.success(action === "approve_id" ? "ID approved" : "Submission rejected");
+    toast.success(action === "approve_id" ? "User verified" : "Submission rejected");
     onChanged();
   };
 
@@ -173,6 +176,58 @@ export function SubmissionDetail({
           )}
         </Section>
 
+        {/* Liveness recording + captured frames */}
+        <Section icon={Video} title="Liveness check">
+          {item.liveness_checked_at ? (
+            <>
+              <div className="flex flex-wrap items-center gap-2 mb-2.5">
+                <span className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded border ${item.liveness_passed ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30" : "bg-destructive/10 text-destructive border-destructive/30"}`}>
+                  {item.liveness_passed ? "Liveness passed" : "Liveness failed"}
+                </span>
+                <span className="text-[11px] text-muted-foreground">
+                  Face match confidence: <span className="font-semibold text-foreground">{Math.round(item.face_match_score ?? 0)}%</span>
+                </span>
+                <span className="text-[10px] text-muted-foreground">
+                  · captured {new Date(item.liveness_checked_at).toLocaleString()}
+                </span>
+              </div>
+
+              {signed.liveness_video ? (
+                <video
+                  src={signed.liveness_video}
+                  controls
+                  playsInline
+                  className="w-full max-w-md rounded-md border border-border bg-black aspect-[4/3] object-cover"
+                />
+              ) : (
+                <p className="text-[11px] text-muted-foreground italic">No video recording available for this session.</p>
+              )}
+
+              {signed.liveness_frames && signed.liveness_frames.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1.5">Captured frames</p>
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {signed.liveness_frames.map((url, i) => (
+                      <a key={url} href={url} target="_blank" rel="noreferrer" className="shrink-0">
+                        <img
+                          src={url}
+                          alt={`Liveness frame ${i + 1}`}
+                          className="h-20 w-20 object-cover rounded-md border border-border"
+                        />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="text-[11px] text-muted-foreground italic">
+              The user has not completed the liveness check yet.
+            </p>
+          )}
+        </Section>
+
+
         {/* eVerify step */}
         {isPending && (
           <Section icon={QrCode} title="Step 1 · Verify on eVerify.gov.ph" badge="Required">
@@ -230,9 +285,9 @@ export function SubmissionDetail({
 
         {/* Decision step */}
         {isPending && (
-          <Section icon={ShieldCheck} title="Step 2 · Decide">
+          <Section icon={ShieldCheck} title="Step 2 · Approve marketplace access">
             <p className="text-[11px] text-muted-foreground mb-2">
-              Approval requires eVerify to be marked as passed.
+              Approving grants the user marketplace access. Requires eVerify passed and a completed liveness check.
             </p>
             <Textarea
               placeholder="Optional notes (shown to user if rejected)…"
@@ -244,11 +299,11 @@ export function SubmissionDetail({
             <div className="flex gap-2">
               <Button
                 size="sm"
-                disabled={busy || item.everify_status !== "passed"}
+                disabled={busy || item.everify_status !== "passed" || !item.liveness_checked_at}
                 onClick={() => act("approve_id")}
               >
                 {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                Approve ID
+                Approve & verify
               </Button>
               <Button size="sm" variant="destructive" disabled={busy} onClick={() => act("reject")}>
                 <XCircle className="h-3.5 w-3.5" /> Reject

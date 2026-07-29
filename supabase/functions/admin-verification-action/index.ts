@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
     if (body.action === "list") {
       const { data, error } = await admin
         .from("verifications")
-        .select("user_id, status, ocr_full_name, ocr_first_name, ocr_middle_name, ocr_last_name, ocr_date_of_birth, ocr_gender, ocr_sex, ocr_psn, ocr_document_number, ocr_address, ocr_nationality, ocr_place_of_birth, ocr_blood_type, ocr_marital_status, ocr_date_of_issue, id_front_path, id_back_path, face_match_score, liveness_passed, admin_notes, submitted_at, verified_at, qr_payload, everify_status, everify_checked_at, everify_notes")
+        .select("user_id, status, ocr_full_name, ocr_first_name, ocr_middle_name, ocr_last_name, ocr_date_of_birth, ocr_gender, ocr_sex, ocr_psn, ocr_document_number, ocr_address, ocr_nationality, ocr_place_of_birth, ocr_blood_type, ocr_marital_status, ocr_date_of_issue, id_front_path, id_back_path, face_match_score, liveness_passed, liveness_video_path, liveness_frame_paths, liveness_checked_at, admin_notes, submitted_at, verified_at, qr_payload, everify_status, everify_checked_at, everify_notes")
         .order("submitted_at", { ascending: false });
 
       if (error) throw error;
@@ -81,7 +81,7 @@ Deno.serve(async (req) => {
 
       const { data: row, error } = await admin
         .from("verifications")
-        .select("id_front_path, id_back_path")
+        .select("id_front_path, id_back_path, liveness_video_path, liveness_frame_paths")
         .eq("user_id", body.user_id)
         .maybeSingle();
 
@@ -102,10 +102,24 @@ Deno.serve(async (req) => {
       if (frontResult.error) throw frontResult.error;
       if (backResult.error) throw backResult.error;
 
+      let livenessVideo: string | null = null;
+      if (row.liveness_video_path) {
+        const v = await admin.storage.from("liveness-media").createSignedUrl(row.liveness_video_path, 60 * 10);
+        livenessVideo = v.data?.signedUrl ?? null;
+      }
+
+      const framePaths: string[] = Array.isArray(row.liveness_frame_paths) ? row.liveness_frame_paths : [];
+      const frameSigned = await Promise.all(
+        framePaths.map((p) => admin.storage.from("liveness-media").createSignedUrl(p, 60 * 10)),
+      );
+      const livenessFrames = frameSigned.map((r) => r.data?.signedUrl).filter(Boolean) as string[];
+
       return new Response(JSON.stringify({
         ok: true,
         front: frontResult.data?.signedUrl,
         back: backResult.data?.signedUrl,
+        liveness_video: livenessVideo,
+        liveness_frames: livenessFrames,
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -150,15 +164,21 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Require eVerify pass before allowing approval
+      // Require eVerify pass + a completed liveness check before final approval
       const { data: gate, error: gateErr } = await admin
         .from("verifications")
-        .select("everify_status")
+        .select("everify_status, liveness_checked_at")
         .eq("user_id", body.user_id)
         .maybeSingle();
       if (gateErr) throw gateErr;
       if (!gate || gate.everify_status !== "passed") {
-        return new Response(JSON.stringify({ error: "Mark eVerify as passed before approving the ID." }), {
+        return new Response(JSON.stringify({ error: "Mark eVerify as passed before approving." }), {
+          status: 412,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (!gate.liveness_checked_at) {
+        return new Response(JSON.stringify({ error: "User has not completed the liveness check yet." }), {
           status: 412,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -201,16 +221,18 @@ Deno.serve(async (req) => {
       }, { onConflict: "user_id" });
       if (upsertErr) throw upsertErr;
 
-      // Mirror the verified full name onto the public profile so the header shows it
-      await admin.from("profiles").update({ name: fullName }).eq("id", body.user_id);
+      // Mirror the verified full name onto the public profile and grant marketplace access
+      await admin.from("profiles").update({ name: fullName, is_verified: true }).eq("id", body.user_id);
 
+      const now = new Date().toISOString();
       const { error } = await admin
         .from("verifications")
         .update({
-          status: "id_approved",
+          status: "verified",
           admin_notes: body.notes ?? null,
-          id_approved_at: new Date().toISOString(),
+          id_approved_at: now,
           id_approved_by: userData.user.id,
+          verified_at: now,
         })
         .eq("user_id", body.user_id);
 

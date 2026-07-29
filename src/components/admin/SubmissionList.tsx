@@ -15,8 +15,9 @@ type FilterKey = "all" | VerificationStatus;
 
 const FILTERS: { key: FilterKey; label: string }[] = [
   { key: "all", label: "All" },
-  { key: "pending", label: "Pending" },
-  { key: "id_approved", label: "Approved" },
+  { key: "pending", label: "Ready for review" },
+  { key: "awaiting_liveness", label: "Awaiting liveness" },
+  { key: "verified", label: "Verified" },
   { key: "rejected", label: "Rejected" },
 ];
 

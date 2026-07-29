@@ -10,7 +10,7 @@ import { compressImageToDataUrl } from "@/lib/image-quality";
 import { IDVerification } from "@/components/verify/IDVerification";
 
 type VerifRow = {
-  status: "pending" | "id_approved" | "verified" | "rejected" | null;
+  status: "awaiting_liveness" | "pending" | "id_approved" | "verified" | "rejected" | null;
   ocr_full_name: string | null;
   ocr_first_name: string | null;
   ocr_middle_name: string | null;
@@ -91,7 +91,8 @@ const Verify = () => {
           </div>
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Verify your identity</h1>
           <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
-            Marketa requires verified identities to keep transactions safe. Complete both steps to access the marketplace.
+            Marketa requires verified identities to keep transactions safe. Upload your ID, complete the liveness check,
+            then an admin reviews everything before you get marketplace access.
           </p>
         </header>
 
@@ -102,12 +103,12 @@ const Verify = () => {
             <IDVerification onSubmitted={loadStatus} />
           )}
 
-          {status === "pending" && (
-            <PendingPanel verif={verif!} />
+          {(status === "awaiting_liveness" || status === "id_approved") && (
+            <Step2Liveness onPassed={async () => { await refreshStatus(); await loadStatus(); }} />
           )}
 
-          {status === "id_approved" && (
-            <Step2Liveness onPassed={async () => { await refreshStatus(); await loadStatus(); }} />
+          {status === "pending" && (
+            <PendingPanel verif={verif!} />
           )}
 
           {status === "verified" && <SuccessPanel score={verif?.face_match_score ?? 100} />}
@@ -129,14 +130,14 @@ export default Verify;
 function Stepper({ status }: { status: VerifRow["status"] }) {
   const steps = [
     { key: "id", label: "ID Upload" },
-    { key: "approval", label: "Admin Review" },
     { key: "live", label: "Liveness" },
+    { key: "approval", label: "Admin Review" },
     { key: "done", label: "Verified" },
   ];
   const activeIdx =
     status === "verified" ? 3 :
-    status === "id_approved" ? 2 :
-    status === "pending" ? 1 : 0;
+    status === "pending" ? 2 :
+    (status === "awaiting_liveness" || status === "id_approved") ? 1 : 0;
   return (
     <ol className="flex items-center justify-between gap-2 px-1">
       {steps.map((s, i) => {
@@ -168,9 +169,10 @@ function PendingPanel({ verif }: { verif: VerifRow }) {
         <div className="mx-auto h-12 w-12 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 grid place-items-center mb-3">
           <Loader2 className="h-6 w-6 animate-spin" />
         </div>
-        <h2 className="font-semibold">Pending admin approval</h2>
+        <h2 className="font-semibold">Pending admin review</h2>
         <p className="text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
-          Your ID has been submitted. This page refreshes automatically once an admin reviews it.
+          Your ID details and liveness recording have been submitted. An admin will review the full package —
+          this page refreshes automatically once they decide.
         </p>
       </div>
 
@@ -268,13 +270,38 @@ function actionKeyFor(c: ChallengeKey): "blink" | "turn_head" | "smile" {
   return "turn_head";
 }
 
+function pickMimeType(): string {
+  const candidates = [
+    "video/webm;codecs=vp9",
+    "video/webm;codecs=vp8",
+    "video/webm",
+    "video/mp4",
+  ];
+  for (const c of candidates) {
+    if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(c)) return c;
+  }
+  return "";
+}
+
+function dataUrlToBlob(dataUrl: string): Blob {
+  const [head, b64] = dataUrl.split(",");
+  const mime = head.match(/data:([^;]+)/)?.[1] ?? "image/jpeg";
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
+
 function Step2Liveness({ onPassed }: { onPassed: () => void }) {
+  const { user } = useAuth();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const faceMeshRef = useRef<any>(null);
   const cameraRef = useRef<any>(null);
   const framesRef = useRef<string[]>([]);
   const frameTimerRef = useRef<number | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
   const currentIdxRef = useRef(0);
   const blinkStateRef = useRef({ below: false, count: 0 });
   const holdRef = useRef(0);
@@ -300,11 +327,27 @@ function Step2Liveness({ onPassed }: { onPassed: () => void }) {
     return c.toDataURL("image/jpeg", 0.82);
   };
 
+  const stopRecording = (): Promise<Blob | null> =>
+    new Promise((resolve) => {
+      const rec = recorderRef.current;
+      if (!rec || rec.state === "inactive") { resolve(null); return; }
+      rec.onstop = () => {
+        const blob = chunksRef.current.length
+          ? new Blob(chunksRef.current, { type: rec.mimeType || "video/webm" })
+          : null;
+        recorderRef.current = null;
+        resolve(blob);
+      };
+      try { rec.stop(); } catch { resolve(null); }
+    });
+
   const stopAll = () => {
     if (frameTimerRef.current) {
       window.clearInterval(frameTimerRef.current);
       frameTimerRef.current = null;
     }
+    try { recorderRef.current?.state !== "inactive" && recorderRef.current?.stop(); } catch { /* ignore */ }
+    recorderRef.current = null;
     try { cameraRef.current?.stop?.(); } catch { /* ignore */ }
     cameraRef.current = null;
     try { faceMeshRef.current?.close?.(); } catch { /* ignore */ }
@@ -399,9 +442,44 @@ function Step2Liveness({ onPassed }: { onPassed: () => void }) {
     const actionKey = actionKeyFor(firstKey);
     const frames = framesRef.current.slice();
 
+    // Stop and upload the recording + frames so the admin can review the footage.
+    const videoBlob = await stopRecording();
+    let videoPath: string | null = null;
+    const framePaths: string[] = [];
+
+    if (user) {
+      const ts = Date.now();
+      try {
+        if (videoBlob && videoBlob.size > 0) {
+          const ext = (videoBlob.type || "").includes("mp4") ? "mp4" : "webm";
+          const path = `${user.id}/${ts}-liveness.${ext}`;
+          const up = await supabase.storage.from("liveness-media").upload(path, videoBlob, {
+            contentType: videoBlob.type || "video/webm",
+            upsert: true,
+          });
+          if (!up.error) videoPath = path;
+          else console.error("liveness video upload failed", up.error);
+        }
+
+        const uploads = await Promise.all(
+          frames.map(async (f, i) => {
+            const path = `${user.id}/${ts}-frame-${String(i).padStart(2, "0")}.jpg`;
+            const { error } = await supabase.storage.from("liveness-media").upload(path, dataUrlToBlob(f), {
+              contentType: "image/jpeg",
+              upsert: true,
+            });
+            return error ? null : path;
+          }),
+        );
+        uploads.forEach((p) => { if (p) framePaths.push(p); });
+      } catch (e) {
+        console.error("liveness media upload error", e);
+      }
+    }
+
     try {
       const { data, error } = await supabase.functions.invoke("verify-liveness", {
-        body: { action: actionKey, frames },
+        body: { action: actionKey, frames, video_path: videoPath, frame_paths: framePaths },
       });
       if (error) {
         const msg = (data as { error?: string } | undefined)?.error ?? error.message ?? "Verification failed.";
@@ -462,6 +540,7 @@ function Step2Liveness({ onPassed }: { onPassed: () => void }) {
 
     // Reset state
     framesRef.current = [];
+    chunksRef.current = [];
     currentIdxRef.current = 0;
     blinkStateRef.current = { below: false, count: 0 };
     holdRef.current = 0;
@@ -469,6 +548,18 @@ function Step2Liveness({ onPassed }: { onPassed: () => void }) {
     submittedRef.current = false;
     setCurrentIdx(0);
     setResult(null);
+
+    // Record the session so an admin can watch the footage during review.
+    try {
+      const mimeType = pickMimeType();
+      const rec = new MediaRecorder(streamRef.current!, mimeType ? { mimeType } : undefined);
+      rec.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunksRef.current.push(e.data); };
+      rec.start(1000);
+      recorderRef.current = rec;
+    } catch (e) {
+      console.error("MediaRecorder unavailable", e);
+      recorderRef.current = null;
+    }
 
     const faceMesh = new w.FaceMesh({
       locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`,
@@ -510,6 +601,7 @@ function Step2Liveness({ onPassed }: { onPassed: () => void }) {
   const resetAll = () => {
     stopAll();
     framesRef.current = [];
+    chunksRef.current = [];
     currentIdxRef.current = 0;
     blinkStateRef.current = { below: false, count: 0 };
     holdRef.current = 0;
@@ -533,7 +625,9 @@ function Step2Liveness({ onPassed }: { onPassed: () => void }) {
         <div className="h-9 w-9 rounded-full bg-primary/10 text-primary grid place-items-center"><Video className="h-4 w-4" /></div>
         <div>
           <h2 className="font-semibold">Step 2 · Active liveness check</h2>
-          <p className="text-sm text-muted-foreground">Complete 4 quick face challenges to prove you're a real person.</p>
+          <p className="text-sm text-muted-foreground">
+            Complete 4 quick face challenges. The session is recorded and sent to an admin for final review.
+          </p>
         </div>
       </div>
 
@@ -575,7 +669,7 @@ function Step2Liveness({ onPassed }: { onPassed: () => void }) {
 
       {result && (
         <div className={`mt-4 rounded-lg border p-3 text-sm ${result.passed ? "border-emerald-500/30 bg-emerald-500/5" : "border-destructive/30 bg-destructive/5"}`}>
-          <p className="font-medium">{result.passed ? "Match confirmed" : "Verification failed"}</p>
+          <p className="font-medium">{result.passed ? "Liveness submitted for admin review" : "Liveness check failed"}</p>
           <p className="text-muted-foreground">Confidence: {Math.round(result.score)}% — {result.reason}</p>
         </div>
       )}

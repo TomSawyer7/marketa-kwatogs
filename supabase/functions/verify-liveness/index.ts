@@ -4,6 +4,8 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 type Body = {
   action: "blink" | "turn_head" | "smile";
   frames: string[];
+  video_path?: string | null;
+  frame_paths?: string[] | null;
 };
 
 function dataUrlToParts(d: string): { mime: string; b64: string } {
@@ -76,8 +78,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (verif.status !== "id_approved") {
-      return new Response(JSON.stringify({ error: "ID not yet approved by admin." }), {
+    if (verif.status !== "awaiting_liveness" && verif.status !== "id_approved") {
+      return new Response(JSON.stringify({ error: "Upload your ID before running the liveness check." }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -183,18 +185,18 @@ Deno.serve(async (req) => {
 
     const result = JSON.parse(toolCall.function.arguments);
     const passed = result.liveness_passed === true && Number(result.face_match_score) >= 90;
-    const newStatus = passed ? "verified" : "id_approved";
+    // Liveness no longer auto-verifies: on success the package moves to admin review.
+    const newStatus = passed ? "pending" : "awaiting_liveness";
 
     await admin.from("verifications").update({
       liveness_passed: result.liveness_passed === true,
       face_match_score: Number(result.face_match_score) || 0,
+      liveness_video_path: body.video_path ?? null,
+      liveness_frame_paths: Array.isArray(body.frame_paths) ? body.frame_paths : [],
+      liveness_checked_at: new Date().toISOString(),
       status: newStatus,
-      verified_at: passed ? new Date().toISOString() : null,
+      verified_at: null,
     }).eq("user_id", user.id);
-
-    if (passed) {
-      await admin.from("profiles").update({ is_verified: true }).eq("id", user.id);
-    }
 
     return new Response(JSON.stringify({
       ok: true,
@@ -202,7 +204,7 @@ Deno.serve(async (req) => {
       liveness_passed: result.liveness_passed === true,
       face_match_score: Number(result.face_match_score) || 0,
       reason: passed
-        ? "Identity verified."
+        ? "Liveness passed. An admin will review your ID and recording."
         : (result.liveness_reason || result.face_match_reason || "Verification did not meet the threshold. Please retry."),
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
