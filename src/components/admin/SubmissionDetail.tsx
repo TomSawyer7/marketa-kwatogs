@@ -47,7 +47,7 @@ export function SubmissionDetail({
   item: DetailItem;
   onChanged: () => void;
 }) {
-  const [signed, setSigned] = useState<{ front?: string; back?: string }>({});
+  const [signed, setSigned] = useState<{ front?: string; back?: string; liveness_video?: string | null; liveness_frames?: string[] }>({});
   const [busy, setBusy] = useState(false);
   const [notes, setNotes] = useState(item.admin_notes ?? "");
 
@@ -62,8 +62,8 @@ export function SubmissionDetail({
       });
       if (cancelled) return;
       if (error) { toast.error(error.message); return; }
-      const d = data as { front: string; back: string };
-      setSigned({ front: d.front, back: d.back });
+      const d = data as { front: string; back: string; liveness_video: string | null; liveness_frames: string[] };
+      setSigned({ front: d.front, back: d.back, liveness_video: d.liveness_video, liveness_frames: d.liveness_frames ?? [] });
     })();
     return () => { cancelled = true; };
   }, [item.user_id]);
