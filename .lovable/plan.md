@@ -1,45 +1,50 @@
 ## Goal
-Replace the current "open legal page in a new tab" pattern on the signup form with two in-page modals (Terms, Privacy) that require an explicit "I have read and understood" acknowledgement before the user can click **Agree**. Acceptance for each doc must independently unlock the existing signup checkbox and gate the **Create Account** button. No auth, KYC, MPIN, or business logic changes.
+Switch the Forgot Password flow from magic-link recovery to 8-digit email OTP verification, matching the new Supabase `{{ .Token }}` template. Keep login, registration, email verification, MPIN, KYC, and all other flows untouched.
 
-## Scope (files touched)
-- New: `src/components/legal/LegalAgreementModal.tsx` — reusable modal shell.
-- Edit: `src/pages/Auth.tsx` — swap the single "agreed" checkbox for two independent flags (`termsAgreed`, `privacyAgreed`), wire modal triggers, update button gating and acceptance recording.
+## New user flow
 
-Nothing else changes. Legal content (`src/content/legal/terms.tsx`, `privacy.tsx`), versioning (`src/lib/legal-version.ts`), acceptance recording (`src/lib/legal.ts`), and the standalone `/legal/*` pages stay exactly as they are.
+```text
+/forgot-password  →  enter email, request OTP
+        ↓
+/verify-reset-password  →  enter 8-digit code (resend w/ 60s cooldown)
+        ↓
+/create-new-password  →  set + confirm new password
+        ↓
+/auth  (success toast, signed out)
+```
 
-## Modal component
-`LegalAgreementModal` built on the existing shadcn `Dialog` primitive to match the design system.
+## Changes
 
-Props:
-- `open`, `onOpenChange`
-- `doc: LegalDoc` (reuses existing `termsDoc` / `privacyDoc`)
-- `version: string`
-- `onAgree: () => void`
+1. **`src/pages/ForgotPassword.tsx`**
+   - Send OTP via `supabase.auth.resetPasswordForEmail(email)` (no `redirectTo`, so Supabase emails the token only).
+   - On success, store the email in `sessionStorage` (`marketa.reset.email`) and navigate to `/verify-reset-password`.
+   - Update copy: "we'll email you an 8-digit code".
 
-Behavior:
-- Sticky header: title + version/last-updated line + close (X) button.
-- Scrollable body: renders `doc.intro` and `doc.sections` using the same typography as `LegalLayout`, so formatting stays consistent.
-- Sticky footer: acknowledgement checkbox ("I have read and understood this document.") + `Close` and `Agree` buttons. `Agree` is disabled until the checkbox is ticked.
-- ESC and outside-click close the modal but do NOT call `onAgree` (override Radix defaults via `onEscapeKeyDown` / `onPointerDownOutside` — they still close, they just don't accept).
-- Accessibility: `DialogTitle`, `DialogDescription`, focus trap from Radix, checkbox has a proper `<Label>`, `Agree` is keyboard reachable.
-- Responsive: `max-w-2xl w-[95vw] max-h-[90vh]` with an inner scroll container; body scroll locked by Dialog, background page unaffected.
-- Resets the internal "understood" checkbox each time the modal opens so re-opening requires a fresh acknowledgement.
+2. **`src/pages/VerifyResetPassword.tsx`** (new)
+   - Read email from `sessionStorage`; if missing, redirect to `/forgot-password`.
+   - 8 separate numeric input boxes: auto-focus, auto-advance, backspace to previous, numeric-only, paste splits across boxes, responsive.
+   - Submit: `supabase.auth.verifyOtp({ email, token, type: "recovery" })`. On success, mark `sessionStorage["marketa.reset.verified"] = "1"` and navigate to `/create-new-password`.
+   - Resend button: calls `resetPasswordForEmail` again, then disables for 60s with visible countdown.
+   - Errors: invalid code, expired code, network — surfaced via inline text + `toast.error`.
 
-## Auth page changes
-In `src/pages/Auth.tsx`:
-- Replace `agreed` state with `termsAgreed` and `privacyAgreed`.
-- Add `termsOpen` / `privacyOpen` modal state.
-- Rebuild the consent row: a single disabled checkbox reflecting `termsAgreed && privacyAgreed` (kept visible for clarity, but users toggle it via the modals per requirement #6, so the checkbox itself is read-only). Two inline links "Terms & Conditions" and "Privacy Policy" open their respective modals instead of navigating.
-- On modal `onAgree`, set the matching flag to `true` and close the modal.
-- `Create Account` button `disabled={busy || !termsAgreed || !privacyAgreed}`.
-- `onSignup` guard updated to check both flags; existing `recordAcceptance("terms", …)` and `recordAcceptance("privacy", …)` calls stay — they already persist user id, document, version (from `LEGAL_VERSIONS`), context, and timestamp, satisfying requirement #8.
+3. **`src/pages/CreateNewPassword.tsx`** (new)
+   - Guard: requires the recovery session (from `verifyOtp`) AND the `marketa.reset.verified` flag; otherwise redirect to `/forgot-password`.
+   - Reuse the existing password rules + confirm-match validation from `ResetPassword.tsx`.
+   - On submit call `updatePassword` (existing hook), then `signOut`, clear session flags, toast success, navigate to `/auth`.
 
-## Out of scope (explicitly untouched)
-- KYC certification checkbox in `IDVerification.tsx`.
-- Settings → Legal section.
-- Footer, routing, existing `/legal/*` pages.
-- `legal_acceptances` schema, RLS, or `recordAcceptance` implementation.
+4. **`src/App.tsx`**
+   - Register the two new public routes: `/verify-reset-password` and `/create-new-password`.
+   - Keep `/reset-password` route for backwards compatibility (harmless) OR remove it — see Open questions.
 
-## Verification
-- `tsgo` typecheck.
-- Manual: open `/auth` → Sign up tab → confirm Create Account disabled, click each link → modal opens with sticky header/footer, Agree disabled until "understood" ticked, ESC closes without accepting, Agree flips the consent flag, both flags required to enable Create Account, submit records acceptance rows with correct versions.
+5. **`src/components/auth/VerificationGate.tsx`**
+   - Add `/verify-reset-password` and `/create-new-password` to `ALWAYS_ALLOWED` so an authenticated-but-recovering session isn't bounced into KYC.
+
+6. **`src/hooks/use-auth.tsx`**
+   - Leave `resetPassword` signature intact but drop the `redirectTo` option (token-only email). `updatePassword` unchanged.
+
+## Not changed
+- Registration email verification, MPIN reset OTP, KYC, admin flows, `use-auth` public API surface.
+- Supabase templates/config (already updated by the user).
+
+## Open questions
+- Keep `/reset-password` (legacy link handler) as a redirect to `/forgot-password`, or delete it entirely? Default: keep it as a redirect for any stale emails in transit.

@@ -123,9 +123,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const resetPassword = useCallback(async (email: string) => {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
+    // Token-only recovery email: Supabase sends the 8-digit OTP via {{ .Token }}.
+    // No redirectTo so no magic link is generated.
+    const { error } = await supabase.auth.resetPasswordForEmail(email);
     logEvent({ category: "auth", action: "password_reset_request", success: !error, failure_reason: error?.message, metadata: { email } });
     return { error: error?.message ?? null };
   }, []);

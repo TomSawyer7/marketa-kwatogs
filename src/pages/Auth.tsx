@@ -42,7 +42,13 @@ const signupSchema = z
     path: ["confirm"],
   });
 
-const PUBLIC_PATHS = new Set(["/", "/auth", "/forgot-password", "/reset-password"]);
+const PUBLIC_PATHS = new Set([
+  "/",
+  "/auth",
+  "/forgot-password",
+  "/verify-reset-password",
+  "/create-new-password",
+]);
 
 const Auth = () => {
   const navigate = useNavigate();

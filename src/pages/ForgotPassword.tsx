@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { z } from "zod";
 import { Store } from "lucide-react";
 import { toast } from "sonner";
@@ -13,11 +13,11 @@ const schema = z.object({
 });
 
 const ForgotPassword = () => {
+  const navigate = useNavigate();
   const { resetPassword } = useAuth();
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [sent, setSent] = useState(false);
 
   useEffect(() => {
     document.title = "Forgot password · Marketa";
@@ -38,8 +38,13 @@ const ForgotPassword = () => {
       toast.error(err);
       return;
     }
-    setSent(true);
-    toast.success("Check your email for a reset link.");
+    try {
+      sessionStorage.setItem("marketa.reset.email", parsed.data.email);
+      sessionStorage.setItem("marketa.reset.sentAt", String(Date.now()));
+      sessionStorage.removeItem("marketa.reset.verified");
+    } catch {}
+    toast.success("We emailed you an 8-digit code.");
+    navigate("/verify-reset-password", { replace: true });
   };
 
   return (
@@ -55,33 +60,26 @@ const ForgotPassword = () => {
         <div className="bg-card border border-border rounded-xl shadow-sm p-6 md:p-8">
           <h1 className="text-2xl font-bold tracking-tight text-center">Forgot password</h1>
           <p className="text-sm text-muted-foreground text-center mt-1">
-            Enter your email and we'll send you a reset link.
+            Enter your email and we'll send you an 8-digit verification code.
           </p>
 
-          {sent ? (
-            <div className="mt-6 text-sm text-center text-muted-foreground">
-              If an account exists for <span className="text-foreground font-medium">{email}</span>,
-              a password reset link has been sent.
+          <form onSubmit={onSubmit} className="space-y-4 mt-6">
+            <div>
+              <Label htmlFor="fp-email">Email</Label>
+              <Input
+                id="fp-email"
+                type="email"
+                autoComplete="email"
+                maxLength={120}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+              {error && <p className="text-xs text-destructive mt-1">{error}</p>}
             </div>
-          ) : (
-            <form onSubmit={onSubmit} className="space-y-4 mt-6">
-              <div>
-                <Label htmlFor="fp-email">Email</Label>
-                <Input
-                  id="fp-email"
-                  type="email"
-                  autoComplete="email"
-                  maxLength={120}
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-                {error && <p className="text-xs text-destructive mt-1">{error}</p>}
-              </div>
-              <Button type="submit" className="w-full" disabled={busy}>
-                {busy ? "Sending…" : "Send reset link"}
-              </Button>
-            </form>
-          )}
+            <Button type="submit" className="w-full" disabled={busy}>
+              {busy ? "Sending…" : "Send verification code"}
+            </Button>
+          </form>
         </div>
 
         <div className="text-center mt-4">
