@@ -119,6 +119,10 @@ const Auth = () => {
       setErrors(fe);
       return;
     }
+    if (!agreed) {
+      toast.error("You must agree to the Terms & Conditions and Privacy Policy.");
+      return;
+    }
     setErrors({});
     setBusy(true);
     const { error } = await signUp(
@@ -133,6 +137,18 @@ const Auth = () => {
       toast.error(msg);
       return;
     }
+    // Best-effort acceptance capture. If the session isn't live yet (email
+    // confirmation required), resolve the user id from getUser and record.
+    try {
+      const { data } = await supabase.auth.getUser();
+      const uid = data.user?.id ?? null;
+      if (uid) {
+        await Promise.all([
+          recordAcceptance("terms", "registration", uid),
+          recordAcceptance("privacy", "registration", uid),
+        ]);
+      }
+    } catch { /* noop */ }
     toast.success("Account created! Check your email for a verification code.");
     navigate("/verify-email", { state: { email: parsed.data.email } });
   };
