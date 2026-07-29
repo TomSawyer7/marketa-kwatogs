@@ -540,6 +540,7 @@ function Step2Liveness({ onPassed }: { onPassed: () => void }) {
 
     // Reset state
     framesRef.current = [];
+    chunksRef.current = [];
     currentIdxRef.current = 0;
     blinkStateRef.current = { below: false, count: 0 };
     holdRef.current = 0;
@@ -547,6 +548,18 @@ function Step2Liveness({ onPassed }: { onPassed: () => void }) {
     submittedRef.current = false;
     setCurrentIdx(0);
     setResult(null);
+
+    // Record the session so an admin can watch the footage during review.
+    try {
+      const mimeType = pickMimeType();
+      const rec = new MediaRecorder(streamRef.current!, mimeType ? { mimeType } : undefined);
+      rec.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunksRef.current.push(e.data); };
+      rec.start(1000);
+      recorderRef.current = rec;
+    } catch (e) {
+      console.error("MediaRecorder unavailable", e);
+      recorderRef.current = null;
+    }
 
     const faceMesh = new w.FaceMesh({
       locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`,
