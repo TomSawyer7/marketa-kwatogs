@@ -129,9 +129,8 @@ const Auth = () => {
       toast.error(msg);
       return;
     }
-    toast.success("Account created! You can log in now.");
-    setTab("login");
-    setLogin({ email: parsed.data.email, password: "" });
+    toast.success("Account created! Check your email for a verification code.");
+    navigate("/verify-email", { state: { email: parsed.data.email } });
   };
 
   return (
