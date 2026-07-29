@@ -137,6 +137,90 @@ export type Database = {
         }
         Relationships: []
       }
+      audit_logs: {
+        Row: {
+          action: string
+          browser: string | null
+          category: string
+          correlation_id: string | null
+          created_at: string
+          current_hash: string
+          description: string | null
+          device: string | null
+          endpoint: string | null
+          entity_id: string | null
+          entity_type: string | null
+          failure_reason: string | null
+          http_method: string | null
+          id: string
+          ip_address: unknown
+          metadata: Json
+          operating_system: string | null
+          previous_hash: string
+          seq: number
+          session_id: string | null
+          status_code: number | null
+          success: boolean
+          timestamp: string
+          user_id: string | null
+          user_role: string | null
+        }
+        Insert: {
+          action: string
+          browser?: string | null
+          category: string
+          correlation_id?: string | null
+          created_at?: string
+          current_hash: string
+          description?: string | null
+          device?: string | null
+          endpoint?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          failure_reason?: string | null
+          http_method?: string | null
+          id?: string
+          ip_address?: unknown
+          metadata?: Json
+          operating_system?: string | null
+          previous_hash: string
+          seq?: number
+          session_id?: string | null
+          status_code?: number | null
+          success?: boolean
+          timestamp?: string
+          user_id?: string | null
+          user_role?: string | null
+        }
+        Update: {
+          action?: string
+          browser?: string | null
+          category?: string
+          correlation_id?: string | null
+          created_at?: string
+          current_hash?: string
+          description?: string | null
+          device?: string | null
+          endpoint?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          failure_reason?: string | null
+          http_method?: string | null
+          id?: string
+          ip_address?: unknown
+          metadata?: Json
+          operating_system?: string | null
+          previous_hash?: string
+          seq?: number
+          session_id?: string | null
+          status_code?: number | null
+          success?: boolean
+          timestamp?: string
+          user_id?: string | null
+          user_role?: string | null
+        }
+        Relationships: []
+      }
       listings: {
         Row: {
           category: string
@@ -892,7 +976,9 @@ export type Database = {
       }
     }
     Functions: {
+      append_audit_log: { Args: { _payload: Json }; Returns: string }
       cancel_deletion: { Args: never; Returns: Json }
+      canonical_jsonb: { Args: { _j: Json }; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -910,6 +996,10 @@ export type Database = {
       }
       request_deletion: { Args: { _mpin: string }; Returns: Json }
       set_mpin: { Args: { _mpin: string }; Returns: Json }
+      verify_audit_chain: {
+        Args: { _from_seq?: number; _to_seq?: number }
+        Returns: Json
+      }
       verify_mpin: { Args: { _mpin: string }; Returns: Json }
       verify_mpin_reset_otp: { Args: { _code: string }; Returns: Json }
     }
