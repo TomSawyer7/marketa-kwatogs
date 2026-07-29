@@ -9,6 +9,10 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import PasswordStrengthMeter from "@/components/auth/PasswordStrengthMeter";
+import { LegalAgreementModal } from "@/components/legal/LegalAgreementModal";
+import { termsDoc } from "@/content/legal/terms";
+import { privacyDoc } from "@/content/legal/privacy";
+import { LEGAL_VERSIONS } from "@/lib/legal-version";
 import { useAuth } from "@/hooks/use-auth";
 import { recordAcceptance } from "@/lib/legal";
 import { supabase } from "@/integrations/supabase/client";
@@ -47,7 +51,11 @@ const Auth = () => {
   const [tab, setTab] = useState<"login" | "signup">("login");
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [agreed, setAgreed] = useState(false);
+  const [termsAgreed, setTermsAgreed] = useState(false);
+  const [privacyAgreed, setPrivacyAgreed] = useState(false);
+  const [termsOpen, setTermsOpen] = useState(false);
+  const [privacyOpen, setPrivacyOpen] = useState(false);
+  const agreed = termsAgreed && privacyAgreed;
 
   const [login, setLogin] = useState({ email: "", password: "" });
   const [signup, setSignup] = useState({
@@ -259,29 +267,55 @@ const Auth = () => {
                   />
                   {errors.confirm && <p className="text-xs text-destructive mt-1">{errors.confirm}</p>}
                 </div>
-                <label className="flex items-start gap-2 text-sm text-muted-foreground">
+                <div className="flex items-start gap-2 text-sm text-muted-foreground">
                   <Checkbox
                     id="signup-agree"
                     checked={agreed}
-                    onCheckedChange={(v) => setAgreed(v === true)}
+                    disabled
+                    aria-readonly
                     className="mt-0.5"
                   />
                   <span>
                     I have read and agree to the{" "}
-                    <Link to="/legal/terms" target="_blank" rel="noopener noreferrer" className="text-primary underline">
+                    <button
+                      type="button"
+                      onClick={() => setTermsOpen(true)}
+                      className="text-primary underline hover:no-underline"
+                    >
                       Terms &amp; Conditions
-                    </Link>{" "}
+                    </button>
+                    {termsAgreed && <span className="text-primary"> ✓</span>}{" "}
                     and{" "}
-                    <Link to="/legal/privacy" target="_blank" rel="noopener noreferrer" className="text-primary underline">
+                    <button
+                      type="button"
+                      onClick={() => setPrivacyOpen(true)}
+                      className="text-primary underline hover:no-underline"
+                    >
                       Privacy Policy
-                    </Link>
+                    </button>
+                    {privacyAgreed && <span className="text-primary"> ✓</span>}
                     .
                   </span>
-                </label>
+                </div>
                 <Button type="submit" className="w-full" disabled={busy || !agreed}>
                   {busy ? "Creating account…" : "Create account"}
                 </Button>
               </form>
+
+              <LegalAgreementModal
+                open={termsOpen}
+                onOpenChange={setTermsOpen}
+                doc={termsDoc}
+                version={LEGAL_VERSIONS.terms}
+                onAgree={() => setTermsAgreed(true)}
+              />
+              <LegalAgreementModal
+                open={privacyOpen}
+                onOpenChange={setPrivacyOpen}
+                doc={privacyDoc}
+                version={LEGAL_VERSIONS.privacy}
+                onAgree={() => setPrivacyAgreed(true)}
+              />
             </TabsContent>
           </Tabs>
           
