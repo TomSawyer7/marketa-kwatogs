@@ -1,9 +1,11 @@
 import { useRef, useState } from "react";
 import { ArrowRight, CheckCircle2, Loader2, RefreshCw, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { recordAcceptance } from "@/lib/legal";
 
 /* ============================================================================
  * EXACT scanID logic — DO NOT MODIFY
