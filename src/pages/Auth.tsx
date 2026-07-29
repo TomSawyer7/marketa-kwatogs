@@ -40,7 +40,7 @@ const PUBLIC_PATHS = new Set(["/", "/auth", "/forgot-password", "/reset-password
 const Auth = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, loading, isVerified, isAdmin, signIn, signUp, refreshStatus } = useAuth();
+  const { user, loading, isVerified, isAdmin, emailVerified, signIn, signUp, refreshStatus } = useAuth();
   const [tab, setTab] = useState<"login" | "signup">("login");
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
