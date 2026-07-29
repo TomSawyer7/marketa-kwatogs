@@ -242,6 +242,7 @@ export function IDVerification({ onSubmitted }: { onSubmitted: () => void }) {
       if (vErr) throw vErr;
 
       // Profile stays is_verified: false until admin approves the full package.
+      void recordAcceptance("kyc_certification", "kyc", user.id);
       toast.success("ID saved. Next: the liveness check.");
       onSubmitted();
     } catch (e) {
