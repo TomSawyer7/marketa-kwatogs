@@ -580,6 +580,33 @@ export type Database = {
           },
         ]
       }
+      user_mpins: {
+        Row: {
+          created_at: string
+          failed_attempts: number
+          locked_until: string | null
+          mpin_hash: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          failed_attempts?: number
+          locked_until?: string | null
+          mpin_hash: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          failed_attempts?: number
+          locked_until?: string | null
+          mpin_hash?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -812,7 +839,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      mpin_status: { Args: never; Returns: Json }
       recalc_account_status: { Args: { _user_id: string }; Returns: undefined }
+      set_mpin: { Args: { _mpin: string }; Returns: Json }
+      verify_mpin: { Args: { _mpin: string }; Returns: Json }
     }
     Enums: {
       app_role: "admin" | "user"
