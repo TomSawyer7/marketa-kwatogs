@@ -130,6 +130,7 @@ export function MpinProvider({ children }: { children: ReactNode }) {
     async (mpin: string, section?: MpinSection): Promise<VerifyResult> => {
       const { data, error } = await supabase.rpc("verify_mpin", { _mpin: mpin });
       if (error) {
+        logEvent({ category: "auth", action: "mpin_verify_failure", success: false, failure_reason: error.message });
         return { ok: false, has_mpin: true, locked: false, attempts_left: 0 };
       }
       const result = data as unknown as VerifyResult;
@@ -139,6 +140,12 @@ export function MpinProvider({ children }: { children: ReactNode }) {
         attempts_left: result.attempts_left,
       });
       if (result.ok && section) unlock(section);
+      logEvent({
+        category: "auth",
+        action: result.ok ? "mpin_verify_success" : (result.locked ? "account_lockout" : "mpin_verify_failure"),
+        success: result.ok,
+        metadata: { section, attempts_left: result.attempts_left },
+      });
       return result;
     },
     [unlock],
@@ -147,7 +154,11 @@ export function MpinProvider({ children }: { children: ReactNode }) {
   const setMpin = useCallback(
     async (mpin: string) => {
       const { error } = await supabase.rpc("set_mpin", { _mpin: mpin });
-      if (error) return { error: error.message };
+      if (error) {
+        logEvent({ category: "auth", action: "mpin_create_failure", success: false, failure_reason: error.message });
+        return { error: error.message };
+      }
+      logEvent({ category: "auth", action: "mpin_create" });
       await refresh();
       return { error: null };
     },
