@@ -28,6 +28,7 @@ import Admin from "./pages/Admin.tsx";
 import Transactions from "./pages/Transactions.tsx";
 import Inbox from "./pages/Inbox.tsx";
 import ChatThread from "./pages/ChatThread.tsx";
+import MpinSetup from "./pages/MpinSetup.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -39,35 +40,39 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
-          <AccountStatusProvider>
-            <MarketaProvider>
-              <VerificationGate>
-                <Routes>
-                  <Route path="/" element={<Landing />} />
-                  <Route path="/browse" element={<Browse />} />
-                  <Route path="/auth" element={<Auth />} />
-                  <Route path="/forgot-password" element={<ForgotPassword />} />
-                  <Route path="/reset-password" element={<ResetPassword />} />
-                  <Route path="/verify-email" element={<VerifyEmail />} />
-                  <Route path="/verify" element={<ProtectedRoute><Verify /></ProtectedRoute>} />
-                  <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
-                  <Route path="/item/:id" element={<ItemDetail />} />
-                  <Route path="/seller/:id" element={<SellerPage />} />
-                  <Route path="/sell" element={<ProtectedRoute><Sell /></ProtectedRoute>} />
-                  <Route path="/saved" element={<ProtectedRoute><Saved /></ProtectedRoute>} />
-                  <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-                  <Route path="/transactions" element={<ProtectedRoute><Transactions /></ProtectedRoute>} />
-                  <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-                  <Route path="/inbox" element={<ProtectedRoute><Inbox /></ProtectedRoute>} />
-                  <Route path="/inbox/:id" element={<ProtectedRoute><ChatThread /></ProtectedRoute>} />
-                  {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-              </VerificationGate>
-            </MarketaProvider>
-          </AccountStatusProvider>
+          <MpinProvider>
+            <AccountStatusProvider>
+              <MarketaProvider>
+                <VerificationGate>
+                  <Routes>
+                    <Route path="/" element={<Landing />} />
+                    <Route path="/browse" element={<Browse />} />
+                    <Route path="/auth" element={<Auth />} />
+                    <Route path="/forgot-password" element={<ForgotPassword />} />
+                    <Route path="/reset-password" element={<ResetPassword />} />
+                    <Route path="/verify-email" element={<VerifyEmail />} />
+                    <Route path="/verify" element={<ProtectedRoute><Verify /></ProtectedRoute>} />
+                    <Route path="/mpin-setup" element={<ProtectedRoute><MpinSetup /></ProtectedRoute>} />
+                    <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
+                    <Route path="/item/:id" element={<ItemDetail />} />
+                    <Route path="/seller/:id" element={<SellerPage />} />
+                    <Route path="/sell" element={<ProtectedRoute><MpinGate section="sell"><Sell /></MpinGate></ProtectedRoute>} />
+                    <Route path="/saved" element={<ProtectedRoute><Saved /></ProtectedRoute>} />
+                    <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+                    <Route path="/transactions" element={<ProtectedRoute><Transactions /></ProtectedRoute>} />
+                    <Route path="/settings" element={<ProtectedRoute><MpinGate section="settings"><Settings /></MpinGate></ProtectedRoute>} />
+                    <Route path="/inbox" element={<ProtectedRoute><MpinGate section="inbox"><Inbox /></MpinGate></ProtectedRoute>} />
+                    <Route path="/inbox/:id" element={<ProtectedRoute><MpinGate section="inbox"><ChatThread /></MpinGate></ProtectedRoute>} />
+                    {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                </VerificationGate>
+              </MarketaProvider>
+            </AccountStatusProvider>
+          </MpinProvider>
         </AuthProvider>
       </BrowserRouter>
+
     </TooltipProvider>
   </QueryClientProvider>
 );
