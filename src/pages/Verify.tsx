@@ -319,12 +319,12 @@ function Step2Liveness({ onPassed }: { onPassed: () => void }) {
     const v = videoRef.current;
     if (!v || !v.videoWidth) return null;
     const c = document.createElement("canvas");
-    c.width = 640;
-    c.height = 480;
+    c.width = v.videoWidth;
+    c.height = v.videoHeight;
     const ctx = c.getContext("2d");
     if (!ctx) return null;
-    ctx.drawImage(v, 0, 0, 640, 480);
-    return c.toDataURL("image/jpeg", 0.82);
+    ctx.drawImage(v, 0, 0);
+    return c.toDataURL("image/jpeg", 0.92);
   };
 
   const stopRecording = (): Promise<Blob | null> =>
@@ -382,26 +382,26 @@ function Step2Liveness({ onPassed }: { onPassed: () => void }) {
       else if (ear > 0.25 && st.below) { st.below = false; st.count += 1; }
       condition = st.count >= 2;
     } else if (ch.key === "smile") {
-      const mouthW = dist(lm[61], lm[291]);
-      const faceW = dist(cheekL, cheekR);
-      condition = faceW > 0 && mouthW / faceW > 0.48;
+      const mouthW = Math.abs(lm[61].x - lm[291].x);
+      const faceW = Math.abs(cheekL.x - cheekR.x);
+      condition = faceW > 0 && mouthW / faceW > 0.42;
     } else if (ch.key === "turn_left") {
-      condition = noseX - centerX < -0.07;
+      condition = noseX - centerX < -0.05;
     } else if (ch.key === "turn_right") {
-      condition = noseX - centerX > 0.07;
+      condition = noseX - centerX > 0.05;
     } else if (ch.key === "look_up" || ch.key === "look_down") {
       const denom = chin.y - forehead.y;
       const ratio = denom === 0 ? 0.5 : (nose.y - forehead.y) / denom;
-      condition = ch.key === "look_up" ? ratio < 0.4 : ratio > 0.6;
+      condition = ch.key === "look_up" ? ratio < 0.42 : ratio > 0.58;
     }
 
-    // Blink counts across frames; others need to hold ~3 frames to avoid flicker
+    // Blink counts across frames; others need to hold ~2 frames to avoid flicker
     if (ch.key === "blink") {
       if (!condition) return;
     } else {
       if (condition) holdRef.current += 1;
       else holdRef.current = 0;
-      if (holdRef.current < 3) return;
+      if (holdRef.current < 2) return;
     }
 
     advancingRef.current = true;
