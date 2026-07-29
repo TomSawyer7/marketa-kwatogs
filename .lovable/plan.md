@@ -1,33 +1,21 @@
-## Plano: Ayusin ang Step2Liveness Bugs
+## Goal
+Users can no longer edit their display name. It is always the name established by identity verification (the name extracted from their ID during KYC).
 
-Gagawin ang mga sumusunod na surgical edits sa `src/pages/Verify.tsx` sa loob ng `Step2Liveness` component. Hindi babaguhin ang UI, imports, o iba pang logic.
+## What changes
 
-### 1. Smile detection ratio fix
-Palitan ang `smile` condition sa `evaluateChallenge`:
-- Tanggalin ang `dist()` para sa `mouthW` at `faceW`.
-- Gumamit ng `Math.abs(x1 - x2)` ratio.
-- I-baba ang threshold mula `0.48` patungo `0.42`.
+**Account settings (`src/pages/Settings.tsx`)**
+- Display name becomes a read-only field: disabled input (muted styling), not editable, no validation errors possible.
+- Helper text under it:
+  - Verified users: "Locked to your verified ID name. Contact support if this is incorrect."
+  - Not-yet-verified users: "Your display name will be set automatically once your ID is verified."
+- Remove `name` from the edit form's validation schema and from the "Reset" behavior's editable fields (email, location, bio, avatar, notifications, privacy stay editable).
 
-### 2. Mas malalaking frames para sa Gemini AI
-Palitan ang `captureFrame` function:
-- Gamitin ang buong native `videoWidth`/`videoHeight` sa halip na fixed 640×480.
-- Taasan ang JPEG quality mula `0.82` patungo `0.92`.
+**Profile save (`src/store/marketa.tsx`)**
+- `updateProfile` stops writing `name` to the `profiles` table, so the field can't be changed via the client even if the UI is bypassed.
 
-### 3. Head turn thresholds
-Palitan ang `turn_left` at `turn_right` thresholds sa `evaluateChallenge`:
-- Mula `±0.07` patungo `±0.05`.
+**Where the name comes from**
+- No backend change needed: the admin approval path already writes the verified full name from the ID into `profiles.name` (and `verified_users.full_name`) when a submission is approved. Settings will simply display whatever that produced.
 
-### 4. Look up / look down thresholds
-Palitan ang ratio condition para sa `look_up` at `look_down`:
-- Mula `< 0.4` / `> 0.6` patungo `< 0.42` / `> 0.58`.
-
-### 5. Hold frames threshold
-Palitan ang hold check:
-- Mula `holdRef.current < 3` patungo `holdRef.current < 2`.
-
-### Files to edit
-- `src/pages/Verify.tsx` — 5 localized replacements sa `Step2Liveness`.
-
-### Verification
-- Typecheck via `tsgo` o `bun run build`.
-- Hindi kailangang baguhin ang edge function dahil ang `face_match_score` ay tama nang ginagamit sa success path; ang error path lamang ang nagre-return ng `score: 0`, na inaasahan.
+## Technical notes
+- Verified state read from `useAuth().isVerified` (already available).
+- No database migration and no RLS change in this plan. Note: a determined user could still update `profiles.name` directly through the API; if you want it hard-locked server-side too, say so and I'll add a trigger that blocks name changes for verified accounts.
