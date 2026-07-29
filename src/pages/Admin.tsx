@@ -11,6 +11,7 @@ import { SubmissionList, type FilterKey, type ListItem } from "@/components/admi
 import { SubmissionDetail, type DetailItem } from "@/components/admin/SubmissionDetail";
 import { TrustPanel } from "@/components/admin/TrustPanel";
 import { AuditLogsWorkspace } from "@/components/admin/audit/AuditLogsWorkspace";
+import { BehaviorMonitoringWorkspace } from "@/components/admin/behavior/BehaviorMonitoringWorkspace";
 
 const Admin = () => {
   const navigate = useNavigate();
