@@ -259,7 +259,26 @@ const Auth = () => {
                   />
                   {errors.confirm && <p className="text-xs text-destructive mt-1">{errors.confirm}</p>}
                 </div>
-                <Button type="submit" className="w-full" disabled={busy}>
+                <label className="flex items-start gap-2 text-sm text-muted-foreground">
+                  <Checkbox
+                    id="signup-agree"
+                    checked={agreed}
+                    onCheckedChange={(v) => setAgreed(v === true)}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    I have read and agree to the{" "}
+                    <Link to="/legal/terms" target="_blank" rel="noopener noreferrer" className="text-primary underline">
+                      Terms &amp; Conditions
+                    </Link>{" "}
+                    and{" "}
+                    <Link to="/legal/privacy" target="_blank" rel="noopener noreferrer" className="text-primary underline">
+                      Privacy Policy
+                    </Link>
+                    .
+                  </span>
+                </label>
+                <Button type="submit" className="w-full" disabled={busy || !agreed}>
                   {busy ? "Creating account…" : "Create account"}
                 </Button>
               </form>
