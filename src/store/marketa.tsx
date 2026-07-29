@@ -313,10 +313,11 @@ export function MarketaProvider({ children }: { children: ReactNode }) {
     if (user) {
       setRemoteProfile((prev) => {
         const base = prev ?? DEFAULT_PROFILE;
-        return { ...base, ...p, notifications: { ...base.notifications, ...(p.notifications ?? {}) } };
+        return { ...base, ...p, name: base.name, notifications: { ...base.notifications, ...(p.notifications ?? {}) } };
       });
       const next: Database["public"]["Tables"]["profiles"]["Update"] = {
-        name: p.name,
+        // display name is locked to the KYC-verified name; never written from the client
+
         email: p.email,
         location: p.location,
         bio: p.bio,
