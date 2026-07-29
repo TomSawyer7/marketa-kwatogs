@@ -137,6 +137,10 @@ const Admin = () => {
           <TabsContent value="trust" className="mt-3">
             <TrustPanel />
           </TabsContent>
+
+          <TabsContent value="audit" className="mt-3">
+            <AuditLogsWorkspace />
+          </TabsContent>
         </Tabs>
       </div>
     </div>
