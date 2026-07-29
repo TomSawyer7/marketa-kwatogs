@@ -185,6 +185,10 @@ export function IDVerification({ onSubmitted }: { onSubmitted: () => void }) {
 
   const handleConfirm = async () => {
     if (!extracted || !user || !front || !back) return;
+    if (!certified) {
+      toast.error("Please confirm the certification checkbox to submit.");
+      return;
+    }
     setConfirming(true);
     try {
       const ts = Date.now();
