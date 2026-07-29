@@ -69,7 +69,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [fetchStatus, user]);
 
   const signIn = useCallback(async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const pre = await checkLoginLock(email);
+    if (pre.locked) {
+      const msg = `Account temporarily locked due to multiple failed login attempts. Try again in ${formatLockDuration(pre.seconds_remaining ?? 600)}.`;
+      logEvent({ category: "auth", action: "login_blocked_locked", success: false, failure_reason: "account_locked", metadata: { email } });
+      return { error: msg };
+    }
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const lock = await registerLoginAttempt(email, !error, data?.user?.id ?? null);
     logEvent({
       category: "auth",
       action: error ? "login_failure" : "login_success",
@@ -77,6 +84,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       failure_reason: error?.message,
       metadata: { email },
     });
+    if (error && lock.locked) {
+      return { error: `Too many failed attempts. Account locked for ${formatLockDuration(lock.seconds_remaining ?? 600)}.` };
+    }
     return { error: error?.message ?? null };
   }, []);
 
