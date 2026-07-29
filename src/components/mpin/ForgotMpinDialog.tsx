@@ -186,7 +186,7 @@ export function ForgotMpinDialog({
               >
                 <InputOTPGroup>
                   {Array.from({ length: OTP_LENGTH }).map((_, i) => (
-                    <InputOTPSlot key={i} index={i} />
+                    <InputOTPSlot key={i} index={i} className="h-11 w-9 text-base" />
                   ))}
                 </InputOTPGroup>
               </InputOTP>
