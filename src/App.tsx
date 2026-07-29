@@ -5,10 +5,13 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { MarketaProvider } from "@/store/marketa";
 import { AuthProvider } from "@/hooks/use-auth";
+import { MpinProvider } from "@/hooks/use-mpin";
 import { AccountStatusProvider } from "@/hooks/use-account-status";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { VerificationGate } from "@/components/auth/VerificationGate";
+import { MpinGate } from "@/components/mpin/MpinGate";
 import Landing from "./pages/Landing.tsx";
+
 import Browse from "./pages/Browse.tsx";
 import ItemDetail from "./pages/ItemDetail.tsx";
 import Sell from "./pages/Sell.tsx";
