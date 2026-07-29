@@ -20,6 +20,11 @@ export type MpinStatus = {
 
 export type VerifyResult = MpinStatus & { ok: boolean };
 
+type MpinResetOtpResult = {
+  ok?: boolean;
+  message?: string;
+};
+
 type MpinCtx = {
   loading: boolean;
   status: MpinStatus | null;
@@ -162,24 +167,17 @@ export function MpinProvider({ children }: { children: ReactNode }) {
 
   const sendResetOtp = useCallback(async () => {
     if (!user?.email) return { error: "No email on this account." };
-    const { error } = await supabase.auth.signInWithOtp({
-      email: user.email,
-      options: {
-        shouldCreateUser: false,
-      },
-    });
+    const { error } = await supabase.auth.reauthenticate();
     return { error: error ? error.message || "Could not send the code." : null };
   }, [user]);
 
   const verifyResetOtp = useCallback(
     async (code: string) => {
       if (!user?.email) return { error: "No email on this account." };
-      const { error } = await supabase.auth.verifyOtp({
-        email: user.email,
-        token: code,
-        type: "email",
-      });
-      return { error: error ? error.message || "Invalid or expired code." : null };
+      const { data, error } = await supabase.rpc("verify_mpin_reset_otp", { _code: code });
+      if (error) return { error: error.message || "Invalid or expired code." };
+      const result = data as MpinResetOtpResult;
+      return { error: result.ok ? null : result.message || "Invalid or expired code." };
     },
     [user],
   );
