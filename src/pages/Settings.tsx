@@ -199,6 +199,80 @@ const Settings = () => {
             </Button>
           </section>
         )}
+
+        {user && (
+          <section className="mt-6 space-y-4">
+            <div>
+              <h3 className="font-semibold text-lg">Account management</h3>
+              <p className="text-sm text-muted-foreground">
+                Take a break or leave for good — these are two different things.
+              </p>
+            </div>
+
+            {/* Deactivate — temporary */}
+            <div className="bg-card border border-yellow-500/40 rounded-lg p-5 md:p-6">
+              <div className="flex items-start gap-3">
+                <PauseCircle className="h-5 w-5 text-yellow-600 mt-0.5 shrink-0" />
+                <div className="flex-1">
+                  <h4 className="font-semibold">Deactivate account (temporary)</h4>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Hides your profile and listings from the marketplace. Nothing is deleted — your
+                    messages, transactions and data stay exactly as they are. Choose 7, 30 or 90
+                    days and it reactivates automatically, or stay hidden indefinitely and come back
+                    whenever you want.
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Requires your MPIN and password.
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 flex justify-end">
+                {isDeactivated ? (
+                  <Button onClick={onReactivate}>Reactivate now</Button>
+                ) : (
+                  <Button variant="outline" onClick={() => setDeactivateOpen(true)}>
+                    Deactivate account
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* Delete — permanent */}
+            <div className="bg-card border border-destructive/40 rounded-lg p-5 md:p-6">
+              <div className="flex items-start gap-3">
+                <Trash2 className="h-5 w-5 text-destructive mt-0.5 shrink-0" />
+                <div className="flex-1">
+                  <h4 className="font-semibold text-destructive">
+                    Delete account permanently (right to be forgotten)
+                  </h4>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Starts a 30-day grace period during which your account is hidden and you can
+                    still cancel. After that your name, email and all KYC/ID and liveness data are
+                    permanently erased and replaced with a “Deleted User” placeholder. Transaction
+                    and listing history is kept, anonymized, for accounting and legal reasons.
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Requires your MPIN, password and an 8-digit code emailed to you.
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 flex justify-end">
+                {isPendingDeletion ? (
+                  <Button variant="outline" onClick={onCancelDeletion}>
+                    Cancel deletion request
+                  </Button>
+                ) : (
+                  <Button variant="destructive" onClick={() => setDeleteOpen(true)}>
+                    Delete account
+                  </Button>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
+
+        <DeactivateAccountDialog open={deactivateOpen} onOpenChange={setDeactivateOpen} />
+        <DeleteAccountDialog open={deleteOpen} onOpenChange={setDeleteOpen} />
       </div>
     </AppShell>
   );
