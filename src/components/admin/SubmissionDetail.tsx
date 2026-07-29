@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, XCircle, Loader2, ExternalLink, Copy, QrCode, ShieldCheck, User, FileText } from "lucide-react";
+import { CheckCircle2, XCircle, Loader2, ExternalLink, Copy, QrCode, ShieldCheck, User, FileText, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
@@ -175,6 +175,58 @@ export function SubmissionDetail({
             </div>
           )}
         </Section>
+
+        {/* Liveness recording + captured frames */}
+        <Section icon={Video} title="Liveness check">
+          {item.liveness_checked_at ? (
+            <>
+              <div className="flex flex-wrap items-center gap-2 mb-2.5">
+                <span className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded border ${item.liveness_passed ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30" : "bg-destructive/10 text-destructive border-destructive/30"}`}>
+                  {item.liveness_passed ? "Liveness passed" : "Liveness failed"}
+                </span>
+                <span className="text-[11px] text-muted-foreground">
+                  Face match confidence: <span className="font-semibold text-foreground">{Math.round(item.face_match_score ?? 0)}%</span>
+                </span>
+                <span className="text-[10px] text-muted-foreground">
+                  · captured {new Date(item.liveness_checked_at).toLocaleString()}
+                </span>
+              </div>
+
+              {signed.liveness_video ? (
+                <video
+                  src={signed.liveness_video}
+                  controls
+                  playsInline
+                  className="w-full max-w-md rounded-md border border-border bg-black aspect-[4/3] object-cover"
+                />
+              ) : (
+                <p className="text-[11px] text-muted-foreground italic">No video recording available for this session.</p>
+              )}
+
+              {signed.liveness_frames && signed.liveness_frames.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1.5">Captured frames</p>
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {signed.liveness_frames.map((url, i) => (
+                      <a key={url} href={url} target="_blank" rel="noreferrer" className="shrink-0">
+                        <img
+                          src={url}
+                          alt={`Liveness frame ${i + 1}`}
+                          className="h-20 w-20 object-cover rounded-md border border-border"
+                        />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="text-[11px] text-muted-foreground italic">
+              The user has not completed the liveness check yet.
+            </p>
+          )}
+        </Section>
+
 
         {/* eVerify step */}
         {isPending && (
