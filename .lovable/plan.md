@@ -1,34 +1,20 @@
-## What's actually wrong
+Plan to fix the Forgot MPIN flow:
 
-The reset dialog already calls `signInWithOtp`, which is the same Supabase OTP mechanism registration uses. The email you received is a link because Supabase renders a **different template** for this call: existing-user OTP emails use the **Magic Link** template, while registration used the **Confirm signup** template (which you already edited to print `{{ .Token }}`). The Magic Link template is still the stock "Follow this link to login" markup, so a link goes out instead of a code.
+1. Update the MPIN reset flow order
+   - Change the dialog sequence from `password → OTP → new MPIN` to `send OTP → OTP input → password confirmation → new MPIN`.
+   - Keep the existing 8-digit OTP input UI and resend-code behavior.
+   - Keep password confirmation required before `set_mpin` is allowed.
 
-So the fix is two parts: one dashboard template change, one code change.
+2. Fix the Supabase Auth OTP call
+   - Update the Forgot MPIN email trigger in `src/hooks/use-mpin.tsx` so it mirrors the registration verification pattern as closely as Supabase allows for an existing user.
+   - Continue verifying with `supabase.auth.verifyOtp({ email, token, type: "email" })` so the entered 8-digit code is verified by Supabase Auth, not only by the client.
+   - Avoid any redirect-driven/magic-link behavior in the app flow.
 
-## 1. Dashboard (one-time, you do this)
+3. Update the email-template source for this OTP flow
+   - The current MPIN reset email is produced by `signInWithOtp`, which uses Supabase’s Magic Link email template for existing users.
+   - I’ll add/update the project’s auth email template source so the Magic Link template displays `{{ .Token }}` as an 8-digit code and removes the “Log In” link/button, styled consistently with the registration OTP email.
+   - If the connected Supabase project requires dashboard-side template activation, I’ll include the exact dashboard setting that must match: Magic Link template body must show `{{ .Token }}`, not `{{ .ConfirmationURL }}`.
 
-In Supabase → Authentication → Email Templates → **Magic Link**, replace the body with a token-based version, mirroring the Confirm signup template:
-
-```html
-<h2>Your Marketa verification code</h2>
-<p>Enter this code to continue:</p>
-<h1>{{ .Token }}</h1>
-<p>This code expires in 1 hour and can be used once.</p>
-```
-
-Token length is a single project-wide setting (Authentication → Providers → Email → OTP length), already 8 for registration, so this code is 8 digits automatically — same generation, same expiry, same verification path.
-
-## 2. Code change
-
-`src/components/mpin/ForgotMpinDialog.tsx`:
-- Change `OTP_LENGTH` from 6 to 8 so the reset step matches registration exactly.
-- Widen the OTP row layout for 8 slots (smaller slot width so it fits the dialog on mobile).
-- Keep the flow order unchanged: password → 8-digit email OTP → new MPIN.
-
-`src/hooks/use-mpin.tsx`:
-- `sendResetOtp` / `verifyResetOtp` stay as they are — `signInWithOtp({ shouldCreateUser: false })` + `verifyOtp({ type: "email" })` is the identical pair `/verify-email` uses.
-
-No database or edge function changes.
-
-## Note
-
-Until the Magic Link template is updated in the dashboard, the reset email will keep arriving as a link no matter what the app code does — the template controls what's rendered.
+4. Validate the flow
+   - Confirm the UI starts by sending the OTP, shows an 8-digit code input, verifies the code server-side, then asks for the account password, then allows the new masked MPIN to be saved.
+   - Ensure this does not affect KYC, identity verification, marketplace access, or normal password reset flows.

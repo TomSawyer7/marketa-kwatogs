@@ -1,1 +1,5 @@
 project_id = "gsawquzxlrkraylbyitt"
+
+[auth.email.template.magic_link]
+subject = "Your Marketa verification code"
+content_path = "./supabase/templates/magic_link.html"

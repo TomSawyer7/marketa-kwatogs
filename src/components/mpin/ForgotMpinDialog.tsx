@@ -1,6 +1,6 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { KeyRound, Lock, Mail } from "lucide-react";
+import { KeyRound, Lock, Mail, Send } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -17,7 +17,7 @@ import { MpinInput, MPIN_LENGTH } from "./MpinInput";
 
 const OTP_LENGTH = 8;
 
-type Step = "password" | "otp" | "mpin";
+type Step = "send" | "otp" | "password" | "mpin";
 
 export function ForgotMpinDialog({
   open,
@@ -29,13 +29,14 @@ export function ForgotMpinDialog({
   onReset?: () => void;
 }) {
   const { reauthenticate, setMpin, sendResetOtp, verifyResetOtp, email } = useMpin();
-  const [step, setStep] = useState<Step>("password");
+  const [step, setStep] = useState<Step>("send");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
   const [pin, setPin] = useState("");
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
   const [resendIn, setResendIn] = useState(0);
+  const autoSentRef = useRef(false);
 
   useEffect(() => {
     if (resendIn <= 0) return;
@@ -45,39 +46,19 @@ export function ForgotMpinDialog({
 
   const reset = (v: boolean) => {
     if (!v) {
-      setStep("password");
+      setStep("send");
       setPassword("");
       setCode("");
       setPin("");
       setConfirm("");
       setResendIn(0);
+      autoSentRef.current = false;
     }
     onOpenChange(v);
   };
 
-  const onPassword = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!password) return;
-    setBusy(true);
-    const { error } = await reauthenticate(password);
-    setPassword("");
-    if (error) {
-      setBusy(false);
-      toast.error(error);
-      return;
-    }
-    const sent = await sendResetOtp();
-    setBusy(false);
-    if (sent.error) {
-      toast.error(sent.error);
-      return;
-    }
-    toast.success(`We sent a ${OTP_LENGTH}-digit code to your email.`);
-    setResendIn(30);
-    setStep("otp");
-  };
-
-  const onResend = async () => {
+  const onSendCode = async (e?: FormEvent) => {
+    e?.preventDefault();
     if (resendIn > 0) return;
     setBusy(true);
     const { error } = await sendResetOtp();
@@ -86,8 +67,35 @@ export function ForgotMpinDialog({
       toast.error(error);
       return;
     }
-    toast.success("A new code has been sent.");
+    setCode("");
+    toast.success(`We sent a ${OTP_LENGTH}-digit code to your email.`);
     setResendIn(30);
+    setStep("otp");
+  };
+
+  useEffect(() => {
+    if (!open || step !== "send" || autoSentRef.current) return;
+    autoSentRef.current = true;
+    void onSendCode();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, step]);
+
+  const onPassword = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!password) return;
+    setBusy(true);
+    const { error } = await reauthenticate(password);
+    setPassword("");
+    setBusy(false);
+    if (error) {
+      toast.error(error);
+      return;
+    }
+    setStep("mpin");
+  };
+
+  const onResend = async () => {
+    await onSendCode();
   };
 
   const onOtp = async (e: FormEvent) => {
@@ -101,7 +109,8 @@ export function ForgotMpinDialog({
       toast.error(error);
       return;
     }
-    setStep("mpin");
+    toast.success("Code verified. Confirm your password to continue.");
+    setStep("password");
   };
 
   const onSubmitMpin = async (e: FormEvent) => {
@@ -127,20 +136,30 @@ export function ForgotMpinDialog({
   };
 
   const icon =
-    step === "password" ? <Lock className="h-5 w-5" /> : step === "otp" ? <Mail className="h-5 w-5" /> : <KeyRound className="h-5 w-5" />;
+    step === "send"
+      ? <Send className="h-5 w-5" />
+      : step === "otp"
+        ? <Mail className="h-5 w-5" />
+        : step === "password"
+          ? <Lock className="h-5 w-5" />
+          : <KeyRound className="h-5 w-5" />;
 
   const title =
-    step === "password"
-      ? "Confirm your password"
+    step === "send"
+      ? "Reset your MPIN"
       : step === "otp"
         ? "Check your email"
+        : step === "password"
+          ? "Confirm your password"
         : "Create a new MPIN";
 
   const description =
-    step === "password"
-      ? "For your security, resetting your MPIN requires your account password."
+    step === "send"
+      ? `We'll send an ${OTP_LENGTH}-digit code to ${email ?? "your registered email"}.`
       : step === "otp"
         ? `Enter the ${OTP_LENGTH}-digit code we sent to ${email ?? "your email"}.`
+        : step === "password"
+          ? "For your security, confirm your account password before creating a new MPIN."
         : "Choose a new 6-digit MPIN. Don't reuse an obvious code.";
 
   return (
@@ -154,21 +173,10 @@ export function ForgotMpinDialog({
           <DialogDescription className="text-center">{description}</DialogDescription>
         </DialogHeader>
 
-        {step === "password" && (
-          <form onSubmit={onPassword} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="mpin-password">Account password</Label>
-              <Input
-                id="mpin-password"
-                type="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoFocus
-              />
-            </div>
-            <Button type="submit" className="w-full" disabled={busy || !password}>
-              {busy ? "Verifying…" : "Continue"}
+        {step === "send" && (
+          <form onSubmit={onSendCode} className="space-y-4">
+            <Button type="submit" className="w-full" disabled={busy || !email}>
+              {busy ? "Sending…" : "Send verification code"}
             </Button>
           </form>
         )}
@@ -179,10 +187,11 @@ export function ForgotMpinDialog({
               <InputOTP
                 maxLength={OTP_LENGTH}
                 value={code}
-                onChange={setCode}
+                onChange={(v) => setCode(v.replace(/\D/g, "").slice(0, OTP_LENGTH))}
                 autoFocus
                 disabled={busy}
                 inputMode="numeric"
+                pattern="[0-9]*"
               >
                 <InputOTPGroup>
                   {Array.from({ length: OTP_LENGTH }).map((_, i) => (
@@ -205,6 +214,25 @@ export function ForgotMpinDialog({
                 {resendIn > 0 ? `Resend in ${resendIn}s` : "Resend code"}
               </button>
             </p>
+          </form>
+        )}
+
+        {step === "password" && (
+          <form onSubmit={onPassword} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="mpin-password">Account password</Label>
+              <Input
+                id="mpin-password"
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <Button type="submit" className="w-full" disabled={busy || !password}>
+              {busy ? "Verifying…" : "Continue"}
+            </Button>
           </form>
         )}
 
