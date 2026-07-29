@@ -164,15 +164,21 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Require eVerify pass before allowing approval
+      // Require eVerify pass + a completed liveness check before final approval
       const { data: gate, error: gateErr } = await admin
         .from("verifications")
-        .select("everify_status")
+        .select("everify_status, liveness_checked_at")
         .eq("user_id", body.user_id)
         .maybeSingle();
       if (gateErr) throw gateErr;
       if (!gate || gate.everify_status !== "passed") {
-        return new Response(JSON.stringify({ error: "Mark eVerify as passed before approving the ID." }), {
+        return new Response(JSON.stringify({ error: "Mark eVerify as passed before approving." }), {
+          status: 412,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (!gate.liveness_checked_at) {
+        return new Response(JSON.stringify({ error: "User has not completed the liveness check yet." }), {
           status: 412,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
