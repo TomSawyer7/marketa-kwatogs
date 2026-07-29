@@ -12,7 +12,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useMarketa } from "@/store/marketa";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
-import { Camera, ArrowLeft, LogOut } from "lucide-react";
+import { Camera, ArrowLeft, LogOut, PauseCircle, Trash2 } from "lucide-react";
+import { useAccountLifecycle } from "@/hooks/use-account-lifecycle";
+import { DeactivateAccountDialog } from "@/components/account/DeactivateAccountDialog";
+import { DeleteAccountDialog } from "@/components/account/DeleteAccountDialog";
 
 const profileSchema = z.object({
   email: z.string().trim().email("Enter a valid email").max(120),
@@ -28,6 +31,21 @@ const Settings = () => {
   const [form, setForm] = useState(profile);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const { isDeactivated, isPendingDeletion, reactivate, cancelDeletion } = useAccountLifecycle();
+  const [deactivateOpen, setDeactivateOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
+  const onReactivate = async () => {
+    const { error } = await reactivate();
+    if (error) toast.error(error);
+    else toast.success("Welcome back — your account is active again.");
+  };
+
+  const onCancelDeletion = async () => {
+    const { error } = await cancelDeletion();
+    if (error) toast.error(error);
+    else toast.success("Deletion cancelled — your account is active again.");
+  };
 
   // Keep form in sync with profile (e.g., when Supabase profile loads after auth)
   useEffect(() => { setForm(profile); }, [profile]);
