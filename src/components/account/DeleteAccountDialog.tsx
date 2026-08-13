@@ -30,7 +30,7 @@ export function DeleteAccountDialog({
   onOpenChange: (v: boolean) => void;
 }) {
   const { verify, reauthenticate, sendResetOtp, verifyResetOtp, email } = useMpin();
-  const { requestDeletion } = useAccountLifecycle();
+  const { requestDeletion, deleteNow } = useAccountLifecycle();
   const { signOut } = useAuth();
   const navigate = useNavigate();
 
