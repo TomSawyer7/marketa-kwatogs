@@ -30,6 +30,7 @@ const SellerPage = () => {
   const { successfulCount } = useSellerTxStats(seller?.id);
   const [bookmarked, setBookmarked] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [hidden, setHidden] = useState(false);
 
   // Deactivated / pending-deletion accounts must not be browsable.
   useEffect(() => {
