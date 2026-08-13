@@ -89,7 +89,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     if (!error) {
       // Flip an account back to active when its scheduled deactivation window elapsed.
-      await supabase.rpc("resolve_lifecycle_on_login").catch(() => undefined);
+      try {
+        await supabase.rpc("resolve_lifecycle_on_login");
+      } catch {
+        /* non-blocking */
+      }
     }
     return { error: error?.message ?? null };
   }, []);
