@@ -31,6 +31,17 @@ const SellerPage = () => {
   const [bookmarked, setBookmarked] = useState(false);
   const [starting, setStarting] = useState(false);
 
+  // Deactivated / pending-deletion accounts must not be browsable.
+  useEffect(() => {
+    if (!id) { setHidden(false); return; }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.rpc("is_account_hidden", { _user_id: id });
+      if (!cancelled) setHidden(Boolean(data));
+    })();
+    return () => { cancelled = true; };
+  }, [id]);
+
   useEffect(() => {
     if (!id || storeSeller) { setFetchedSeller(null); return; }
     let cancelled = false;
