@@ -42,6 +42,8 @@ export function DeactivateAccountDialog({
 }) {
   const { verify, reauthenticate } = useMpin();
   const { deactivate } = useAccountLifecycle();
+  const { signOut } = useAuth();
+  const navigate = useNavigate();
 
   const [step, setStep] = useState<Step>("duration");
   const [duration, setDuration] = useState("30");
