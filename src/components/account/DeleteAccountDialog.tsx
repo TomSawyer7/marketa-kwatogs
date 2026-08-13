@@ -35,6 +35,7 @@ export function DeleteAccountDialog({
   const navigate = useNavigate();
 
   const [step, setStep] = useState<Step>("intro");
+  const [mode, setMode] = useState<"grace" | "immediate">("grace");
   const [pin, setPin] = useState("");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
