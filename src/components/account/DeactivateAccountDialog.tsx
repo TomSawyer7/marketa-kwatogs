@@ -88,8 +88,19 @@ export function DeactivateAccountDialog({
       toast.error(error);
       return;
     }
-    toast.success("Your account is now deactivated.");
+    if (days) {
+      const until = new Date(Date.now() + days * 86_400_000).toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+      toast.success(`Your account is deactivated and will be hidden until ${until}.`);
+    } else {
+      toast.success("Your account is deactivated and stays hidden until you reactivate it.");
+    }
     close(false);
+    await signOut();
+    navigate("/auth", { replace: true });
   };
 
   return (
