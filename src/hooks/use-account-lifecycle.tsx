@@ -103,6 +103,16 @@ export function AccountLifecycleProvider({ children }: { children: ReactNode }) 
     [call],
   );
 
+  const deleteNow = useCallback(async (mpin: string) => {
+    const { data, error } = await supabase.functions.invoke("account-delete-now", {
+      body: { mpin },
+    });
+    if (error) return { error: error.message };
+    const res = (data ?? {}) as { ok?: boolean; error?: string };
+    if (!res.ok) return { error: res.error ?? "Something went wrong." };
+    return { error: null };
+  }, []);
+
   const cancelDeletion = useCallback(() => call(() => supabase.rpc("cancel_deletion")), [call]);
 
   const daysLeft = useMemo(() => {
