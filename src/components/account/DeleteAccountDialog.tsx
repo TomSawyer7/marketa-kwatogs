@@ -53,6 +53,7 @@ export function DeleteAccountDialog({
   const close = (v: boolean) => {
     if (!v) {
       setStep("intro");
+      setMode("grace");
       setPin("");
       setPassword("");
       setCode("");
