@@ -1,50 +1,38 @@
-## Goal
-Switch the Forgot Password flow from magic-link recovery to 8-digit email OTP verification, matching the new Supabase `{{ .Token }}` template. Keep login, registration, email verification, MPIN, KYC, and all other flows untouched.
+# Fix Account Deactivation & Deletion Visibility
 
-## New user flow
+## Current state (verified)
 
-```text
-/forgot-password  →  enter email, request OTP
-        ↓
-/verify-reset-password  →  enter 8-digit code (resend w/ 60s cooldown)
-        ↓
-/create-new-password  →  set + confirm new password
-        ↓
-/auth  (success toast, signed out)
-```
+- Account state already lives in `account_lifecycle` (`state`: active / deactivated / pending_deletion / deleted, plus `deactivated_at`, `reactivate_at`, `deactivation_days`, `deletion_requested_at`, `delete_after`), written by the `request_deactivation`, `request_deletion`, `reactivate_account`, `cancel_deletion` functions.
+- RLS on `profiles` and `listings` already hides rows via `is_account_hidden(...)`, so hidden sellers should already drop out of feeds.
+- Gaps that break the experience: deactivation/deletion do not sign the user out, the marketplace store also merges hard-coded seed listings that never get filtered, `/seller/:id` renders a normal (empty) profile instead of an "unavailable" state, and there is no reactivate prompt on login.
 
-## Changes
+Rather than adding a duplicate `status` column to `profiles` (two sources of truth that can drift), the plan keeps `account_lifecycle` as the single source and exposes the state where the UI needs it.
 
-1. **`src/pages/ForgotPassword.tsx`**
-   - Send OTP via `supabase.auth.resetPasswordForEmail(email)` (no `redirectTo`, so Supabase emails the token only).
-   - On success, store the email in `sessionStorage` (`marketa.reset.email`) and navigate to `/verify-reset-password`.
-   - Update copy: "we'll email you an 8-digit code".
+## What will change
 
-2. **`src/pages/VerifyResetPassword.tsx`** (new)
-   - Read email from `sessionStorage`; if missing, redirect to `/forgot-password`.
-   - 8 separate numeric input boxes: auto-focus, auto-advance, backspace to previous, numeric-only, paste splits across boxes, responsive.
-   - Submit: `supabase.auth.verifyOtp({ email, token, type: "recovery" })`. On success, mark `sessionStorage["marketa.reset.verified"] = "1"` and navigate to `/create-new-password`.
-   - Resend button: calls `resetPasswordForEmail` again, then disables for 60s with visible countdown.
-   - Errors: invalid code, expired code, network — surfaced via inline text + `toast.error`.
+### 1. Database
+- Add a lightweight, read-only view/column exposure so the frontend can ask "is this account hidden?" for a specific profile (`is_account_hidden` is already there; a `profiles`-facing helper RPC will be added for the seller/profile pages).
+- On deletion request: mark the user's listings as hidden immediately (soft archive flag on `listings`) so they vanish even for cached clients, and keep them out of every feed.
+- Fix `reactivate_at` handling so an expired deactivation flips back to active on next login, in addition to the existing cron.
 
-3. **`src/pages/CreateNewPassword.tsx`** (new)
-   - Guard: requires the recovery session (from `verifyOtp`) AND the `marketa.reset.verified` flag; otherwise redirect to `/forgot-password`.
-   - Reuse the existing password rules + confirm-match validation from `ResetPassword.tsx`.
-   - On submit call `updatePassword` (existing hook), then `signOut`, clear session flags, toast success, navigate to `/auth`.
+### 2. Deactivation flow
+- After a successful deactivation, sign the user out and show: "Your account is deactivated and will be hidden until <date>" (or "until you reactivate it" for indefinite).
 
-4. **`src/App.tsx`**
-   - Register the two new public routes: `/verify-reset-password` and `/create-new-password`.
-   - Keep `/reset-password` route for backwards compatibility (harmless) OR remove it — see Open questions.
+### 3. Deletion flow
+- After a successful deletion request, archive the user's listings, sign out, and revoke the session. Keep the existing 30-day grace period and cron finalization.
 
-5. **`src/components/auth/VerificationGate.tsx`**
-   - Add `/verify-reset-password` and `/create-new-password` to `ALWAYS_ALLOWED` so an authenticated-but-recovering session isn't bounced into KYC.
+### 4. Feed / search filtering
+- Marketplace store: filter listings by seller lifecycle state client-side as a safety net on top of RLS, and drop seed listings for hidden sellers.
+- Applies to Browse, Landing, category filters, Saved, and item detail.
 
-6. **`src/hooks/use-auth.tsx`**
-   - Leave `resetPassword` signature intact but drop the `redirectTo` option (token-only email). `updatePassword` unchanged.
+### 5. Profile / seller pages
+- `/seller/:id` (and profile peek in chat): when the target account is deactivated or scheduled for deletion, skip listings and contact info and render "This account is temporarily deactivated or unavailable."
 
-## Not changed
-- Registration email verification, MPIN reset OTP, KYC, admin flows, `use-auth` public API surface.
-- Supabase templates/config (already updated by the user).
+### 6. Reactivation on login
+- On sign-in, if the account is deactivated: auto-reactivate when `reactivate_at` has passed; otherwise prompt "Your account is currently deactivated. Would you like to reactivate it now?" with reactivate / sign-out choices.
+- Users pending deletion keep the existing cancel-deletion banner.
 
-## Open questions
-- Keep `/reset-password` (legacy link handler) as a redirect to `/forgot-password`, or delete it entirely? Default: keep it as a redirect for any stale emails in transit.
+## Technical notes
+
+- Files touched: `src/store/marketa.tsx`, `src/hooks/use-account-lifecycle.tsx`, `src/hooks/use-auth.tsx`, `src/components/account/DeactivateAccountDialog.tsx`, `src/components/account/DeleteAccountDialog.tsx`, `src/pages/SellerPage.tsx`, `src/components/inbox/ProfilePeekDialog.tsx`, plus one migration.
+- No changes to KYC, MPIN, messaging, transactions, or audit logging behaviour.
