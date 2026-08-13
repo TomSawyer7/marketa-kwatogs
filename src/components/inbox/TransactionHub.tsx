@@ -1,8 +1,12 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { ProposalDialog } from "./ProposalDialog";
-import { CheckCircle2, Circle, Handshake, MessageSquareText, Star, Loader2 } from "lucide-react";
+import { CheckCircle2, Circle, Handshake, MessageSquareText, Star, Loader2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { TxRow } from "@/hooks/use-thread-transaction";
@@ -20,6 +24,7 @@ function stageIndex(tx: TxRow | null): number {
   if (tx.status === "seller_completed") return 1;
   return 0;
 }
+
 
 function Stepper({ idx }: { idx: number }) {
   return (
