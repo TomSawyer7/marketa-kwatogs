@@ -121,6 +121,8 @@ export function DeleteAccountDialog({
     }
     toast.success("Deletion requested. You have 30 days to change your mind.");
     close(false);
+    await signOut();
+    navigate("/auth", { replace: true });
   };
 
   return (
