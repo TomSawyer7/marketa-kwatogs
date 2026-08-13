@@ -133,8 +133,11 @@ export function MarketaProvider({ children }: { children: ReactNode }) {
     if (error) {
       console.warn("[marketa] listings load failed:", error.message);
       setDbListings([]);
+      setArchivedIds(new Set());
     } else {
-      setDbListings((data as DbListing[]).map(fromDb));
+      const rows = data as DbListing[];
+      setDbListings(rows.map(fromDb));
+      setArchivedIds(new Set(rows.filter((r) => r.archived_at).map((r) => r.id)));
     }
     setLoadingListings(false);
   }, []);
