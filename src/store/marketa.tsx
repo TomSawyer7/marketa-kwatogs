@@ -127,7 +127,7 @@ export function MarketaProvider({ children }: { children: ReactNode }) {
     setLoadingListings(true);
     const { data, error } = await supabase
       .from("listings")
-      .select("id, seller_id, title, description, category, condition, location, price, images, created_at")
+      .select("id, seller_id, title, description, category, condition, location, price, images, created_at, archived_at")
       .order("created_at", { ascending: false });
 
     if (error) {
