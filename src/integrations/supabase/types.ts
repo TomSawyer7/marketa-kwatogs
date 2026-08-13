@@ -346,6 +346,7 @@ export type Database = {
       }
       listings: {
         Row: {
+          archived_at: string | null
           category: string
           condition: string
           created_at: string
@@ -361,6 +362,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          archived_at?: string | null
           category: string
           condition: string
           created_at?: string
@@ -376,6 +378,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          archived_at?: string | null
           category?: string
           condition?: string
           created_at?: string
@@ -1227,6 +1230,7 @@ export type Database = {
         Returns: Json
       }
       request_deletion: { Args: { _mpin: string }; Returns: Json }
+      resolve_lifecycle_on_login: { Args: never; Returns: Json }
       set_mpin: { Args: { _mpin: string }; Returns: Json }
       verify_audit_chain: {
         Args: { _from_seq?: number; _to_seq?: number }
