@@ -1,8 +1,12 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { ProposalDialog } from "./ProposalDialog";
-import { CheckCircle2, Circle, Handshake, MessageSquareText, Star, Loader2 } from "lucide-react";
+import { CheckCircle2, Circle, Handshake, MessageSquareText, Star, Loader2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { TxRow } from "@/hooks/use-thread-transaction";
@@ -20,6 +24,7 @@ function stageIndex(tx: TxRow | null): number {
   if (tx.status === "seller_completed") return 1;
   return 0;
 }
+
 
 function Stepper({ idx }: { idx: number }) {
   return (
@@ -86,11 +91,16 @@ export function TransactionHub({
 }) {
   const { user } = useAuth();
   const [propOpen, setPropOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const cancelled = tx?.status === "cancelled";
   const idx = stageIndex(tx);
 
   const myRole: "buyer" | "seller" | null =
     tx && user ? (tx.buyer_id === user.id ? "buyer" : tx.seller_id === user.id ? "seller" : null) : null;
+
+  const canCancel =
+    !!tx && !!myRole && ["proposed", "agreed", "discussion", "seller_completed"].includes(tx.status);
 
   const markAsDone = async () => {
     if (!tx || myRole !== "seller") return;
@@ -117,13 +127,31 @@ export function TransactionHub({
     onRate();
   };
 
+  const cancelTransaction = async () => {
+    if (!tx || !canCancel) return;
+    setBusy(true);
+    const { error } = await supabase
+      .from("transactions")
+      .update({ status: "cancelled" })
+      .eq("id", tx.id);
+    setBusy(false);
+    setCancelOpen(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Transaction cancelled.");
+  };
+
   // Contextual action row — a single primary action per state.
   const renderAction = () => {
-    if (!tx) {
+    if (!tx || cancelled) {
       return (
-        <Button size="sm" className="rounded-full gap-1.5" onClick={() => setPropOpen(true)}>
-          <MessageSquareText className="h-4 w-4" /> Create Proposal
-        </Button>
+        <>
+          {cancelled && (
+            <span className="text-xs text-muted-foreground mr-auto">Transaction cancelled.</span>
+          )}
+          <Button size="sm" className="rounded-full gap-1.5" onClick={() => setPropOpen(true)}>
+            <MessageSquareText className="h-4 w-4" /> Create Proposal
+          </Button>
+        </>
       );
     }
     if (tx.status === "completed") {
@@ -160,8 +188,40 @@ export function TransactionHub({
     <div className="border-b border-border bg-card/60 backdrop-blur px-3 md:px-4 py-2.5">
       <Stepper idx={idx} />
       <div className="mt-2.5 flex items-center justify-end gap-2 min-h-[32px]">
+        {canCancel && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="rounded-full gap-1.5 text-destructive hover:text-destructive"
+            disabled={busy}
+            onClick={() => setCancelOpen(true)}
+          >
+            <XCircle className="h-4 w-4" /> Cancel transaction
+          </Button>
+        )}
         {renderAction()}
       </div>
+
+      <AlertDialog open={cancelOpen} onOpenChange={setCancelOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel this transaction?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Both of you will be notified in the chat. This can't be undone, but you can create a
+              new proposal afterwards.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Keep transaction</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={busy}
+              onClick={(e) => { e.preventDefault(); void cancelTransaction(); }}
+            >
+              {busy ? "Cancelling…" : "Yes, cancel"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <ProposalDialog
         open={propOpen}
@@ -173,3 +233,4 @@ export function TransactionHub({
     </div>
   );
 }
+
