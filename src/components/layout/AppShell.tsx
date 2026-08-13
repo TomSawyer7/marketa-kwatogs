@@ -10,6 +10,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-background flex flex-col">
       <Header />
       <AccountLifecycleBanner />
+      <RestoreAccountDialog />
       <RestrictionBanner />
       <main className="min-w-0 flex-1">{children}</main>
       <Footer />
