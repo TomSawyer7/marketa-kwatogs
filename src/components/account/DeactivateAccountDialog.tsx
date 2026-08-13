@@ -24,13 +24,11 @@ import { useMpin } from "@/hooks/use-mpin";
 import { useAccountLifecycle } from "@/hooks/use-account-lifecycle";
 import { useAuth } from "@/hooks/use-auth";
 
-type Step = "duration" | "mpin" | "password";
+type Step = "duration" | "mpin" | "password" | "confirm";
 
 const DURATIONS = [
-  { value: "7", label: "7 days" },
+  { value: "7", label: "7 days (1 week)" },
   { value: "30", label: "30 days" },
-  { value: "90", label: "90 days" },
-  { value: "indefinite", label: "Indefinite — until I reactivate" },
 ];
 
 export function DeactivateAccountDialog({
@@ -80,28 +78,24 @@ export function DeactivateAccountDialog({
     if (!password) return;
     setBusy(true);
     const auth = await reauthenticate(password);
+    setBusy(false);
     if (auth.error) {
-      setBusy(false);
       toast.error(auth.error);
       return;
     }
-    const days = duration === "indefinite" ? null : Number(duration);
+    setStep("confirm");
+  };
+
+  const onConfirm = async () => {
+    const days = Number(duration);
+    setBusy(true);
     const { error } = await deactivate(pinRef.current, days);
     setBusy(false);
     if (error) {
       toast.error(error);
       return;
     }
-    if (days) {
-      const until = new Date(Date.now() + days * 86_400_000).toLocaleDateString(undefined, {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      });
-      toast.success(`Your account is deactivated and will be hidden until ${until}.`);
-    } else {
-      toast.success("Your account is deactivated and stays hidden until you reactivate it.");
-    }
+    toast.success("Account deactivated. Your profile and listings are hidden.");
     close(false);
     await signOut();
     navigate("/auth", { replace: true });
@@ -137,9 +131,7 @@ export function DeactivateAccountDialog({
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground mt-1.5">
-                {duration === "indefinite"
-                  ? "Your account stays hidden until you reactivate it yourself."
-                  : `Your account reactivates automatically after ${duration} days.`}
+                {`Your account reactivates automatically after ${duration} days, or any time you log back in.`}
               </p>
             </div>
             <div className="flex justify-end gap-2">
@@ -188,10 +180,31 @@ export function DeactivateAccountDialog({
                 Cancel
               </Button>
               <Button type="submit" disabled={busy || password.length < 1}>
-                {busy ? "Deactivating…" : "Deactivate account"}
+                {busy ? "Checking…" : "Continue"}
               </Button>
             </div>
           </form>
+        )}
+
+        {step === "confirm" && (
+          <div className="space-y-4">
+            <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4 space-y-2">
+              <p className="font-medium text-sm">Deactivate Account?</p>
+              <p className="text-sm text-muted-foreground">
+                Your profile and active marketplace listings will be immediately hidden from public
+                search, category feeds, and seller pages for {duration} days. You can reactivate
+                anytime by logging back in.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => close(false)} disabled={busy}>
+                Cancel
+              </Button>
+              <Button onClick={onConfirm} disabled={busy}>
+                {busy ? "Deactivating…" : "Yes, deactivate"}
+              </Button>
+            </div>
+          </div>
         )}
       </DialogContent>
     </Dialog>

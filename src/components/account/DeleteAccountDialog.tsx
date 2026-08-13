@@ -30,11 +30,12 @@ export function DeleteAccountDialog({
   onOpenChange: (v: boolean) => void;
 }) {
   const { verify, reauthenticate, sendResetOtp, verifyResetOtp, email } = useMpin();
-  const { requestDeletion } = useAccountLifecycle();
+  const { requestDeletion, deleteNow } = useAccountLifecycle();
   const { signOut } = useAuth();
   const navigate = useNavigate();
 
   const [step, setStep] = useState<Step>("intro");
+  const [mode, setMode] = useState<"grace" | "immediate">("grace");
   const [pin, setPin] = useState("");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
@@ -52,6 +53,7 @@ export function DeleteAccountDialog({
   const close = (v: boolean) => {
     if (!v) {
       setStep("intro");
+      setMode("grace");
       setPin("");
       setPassword("");
       setCode("");
@@ -117,13 +119,20 @@ export function DeleteAccountDialog({
 
   const onConfirm = async () => {
     setBusy(true);
-    const { error } = await requestDeletion(pinRef.current);
+    const { error } =
+      mode === "immediate"
+        ? await deleteNow(pinRef.current)
+        : await requestDeletion(pinRef.current);
     setBusy(false);
     if (error) {
       toast.error(error);
       return;
     }
-    toast.success("Deletion requested. You have 30 days to change your mind.");
+    toast.success(
+      mode === "immediate"
+        ? "Your account has been permanently deleted."
+        : "Deletion requested. You have 30 days to change your mind.",
+    );
     close(false);
     await signOut();
     navigate("/auth", { replace: true });
@@ -136,23 +145,39 @@ export function DeleteAccountDialog({
           <DialogTitle className="flex items-center gap-2 text-destructive">
             <Trash2 className="h-5 w-5" /> Delete account permanently
           </DialogTitle>
-          <DialogDescription>
-            This starts a 30-day grace period. Your account is hidden immediately and you can cancel
-            at any point during those 30 days.
-          </DialogDescription>
+          <DialogDescription>Choose how you want your account removed.</DialogDescription>
         </DialogHeader>
 
         {step === "intro" && (
           <div className="space-y-4">
-            <ul className="text-sm text-muted-foreground space-y-2 list-disc pl-5">
-              <li>Your name, email and profile details are replaced with “Deleted User”.</li>
-              <li>Your ID images, extracted KYC data and liveness recordings are erased for good.</li>
-              <li>
-                Transaction, order and listing history is kept for accounting and legal reasons,
-                attributed to “Deleted User”.
-              </li>
-              <li>This cannot be undone once the 30 days pass.</li>
-            </ul>
+            <div className="space-y-2">
+              {(
+                [
+                  {
+                    key: "grace" as const,
+                    title: "Delete in 30 days (cancellable)",
+                    desc: "Hidden immediately, permanently purged after 30 days. You can cancel by logging back in.",
+                  },
+                  {
+                    key: "immediate" as const,
+                    title: "Delete immediately (permanent)",
+                    desc: "Your profile, verification data and listings are removed right away. Cannot be undone.",
+                  },
+                ]
+              ).map((o) => (
+                <button
+                  key={o.key}
+                  type="button"
+                  onClick={() => setMode(o.key)}
+                  className={`w-full text-left rounded-lg border p-3 transition-colors ${
+                    mode === o.key ? "border-destructive bg-destructive/5" : "hover:bg-muted/50"
+                  }`}
+                >
+                  <p className="text-sm font-medium">{o.title}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{o.desc}</p>
+                </button>
+              ))}
+            </div>
             <div className="flex justify-end gap-2">
               <Button variant="ghost" onClick={() => close(false)}>
                 Cancel
@@ -239,6 +264,18 @@ export function DeleteAccountDialog({
 
         {step === "confirm" && (
           <div className="space-y-4">
+            <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4">
+              <p className="text-sm font-medium text-destructive mb-1">
+                {mode === "immediate"
+                  ? "PERMANENT DELETION DISCLOSURE"
+                  : "30-DAY DELETION DISCLOSURE"}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {mode === "immediate"
+                  ? "Your profile, avatar, personal verification data, and active listings will be immediately deleted. Historical transaction receipts will be anonymized (“Deleted User”) for accounting/legal compliance. This action CANNOT be undone."
+                  : "Your profile and listings will be hidden from the public immediately. Your data will be permanently purged in 30 days. You can cancel this deletion anytime within the next 30 days simply by logging back in."}
+              </p>
+            </div>
             <Label htmlFor="type-delete">
               Type <span className="font-mono font-semibold">DELETE</span> to confirm.
             </Label>
