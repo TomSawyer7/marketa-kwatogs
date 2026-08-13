@@ -119,13 +119,20 @@ export function DeleteAccountDialog({
 
   const onConfirm = async () => {
     setBusy(true);
-    const { error } = await requestDeletion(pinRef.current);
+    const { error } =
+      mode === "immediate"
+        ? await deleteNow(pinRef.current)
+        : await requestDeletion(pinRef.current);
     setBusy(false);
     if (error) {
       toast.error(error);
       return;
     }
-    toast.success("Deletion requested. You have 30 days to change your mind.");
+    toast.success(
+      mode === "immediate"
+        ? "Your account has been permanently deleted."
+        : "Deletion requested. You have 30 days to change your mind.",
+    );
     close(false);
     await signOut();
     navigate("/auth", { replace: true });
