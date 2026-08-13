@@ -16,6 +16,7 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp
 import { MpinInput } from "@/components/mpin/MpinInput";
 import { useMpin } from "@/hooks/use-mpin";
 import { useAccountLifecycle } from "@/hooks/use-account-lifecycle";
+import { useAuth } from "@/hooks/use-auth";
 
 const OTP_LENGTH = 8;
 
