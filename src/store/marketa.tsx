@@ -80,6 +80,7 @@ export function MarketaProvider({ children }: { children: ReactNode }) {
   const [remoteProfile, setRemoteProfile] = useState<Profile | null>(null);
 
   const [dbListings, setDbListings] = useState<Listing[]>([]);
+  const [archivedIds, setArchivedIds] = useState<Set<string>>(new Set());
   const [loadingListings, setLoadingListings] = useState(true);
   const [saved, setSaved] = useState<string[]>([]);
 
