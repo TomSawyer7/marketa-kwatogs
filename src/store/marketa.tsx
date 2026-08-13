@@ -193,8 +193,11 @@ export function MarketaProvider({ children }: { children: ReactNode }) {
 
   // Merge DB listings + read-only seed listings (seed first sorted in)
   const listings = useMemo<Listing[]>(() => {
-    return [...dbListings, ...SEED_LISTINGS].sort((a, b) => b.createdAt - a.createdAt);
-  }, [dbListings]);
+    // Listings belonging to deactivated / pending-deletion accounts are archived
+    // server-side and must never surface in the public feed.
+    const visible = dbListings.filter((l) => !archivedIds.has(l.id));
+    return [...visible, ...SEED_LISTINGS].sort((a, b) => b.createdAt - a.createdAt);
+  }, [dbListings, archivedIds]);
 
   const myListings = useMemo(
     () => (user ? dbListings.filter((l) => l.sellerId === user.id) : []),
