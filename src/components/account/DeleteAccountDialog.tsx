@@ -145,23 +145,39 @@ export function DeleteAccountDialog({
           <DialogTitle className="flex items-center gap-2 text-destructive">
             <Trash2 className="h-5 w-5" /> Delete account permanently
           </DialogTitle>
-          <DialogDescription>
-            This starts a 30-day grace period. Your account is hidden immediately and you can cancel
-            at any point during those 30 days.
-          </DialogDescription>
+          <DialogDescription>Choose how you want your account removed.</DialogDescription>
         </DialogHeader>
 
         {step === "intro" && (
           <div className="space-y-4">
-            <ul className="text-sm text-muted-foreground space-y-2 list-disc pl-5">
-              <li>Your name, email and profile details are replaced with “Deleted User”.</li>
-              <li>Your ID images, extracted KYC data and liveness recordings are erased for good.</li>
-              <li>
-                Transaction, order and listing history is kept for accounting and legal reasons,
-                attributed to “Deleted User”.
-              </li>
-              <li>This cannot be undone once the 30 days pass.</li>
-            </ul>
+            <div className="space-y-2">
+              {(
+                [
+                  {
+                    key: "grace" as const,
+                    title: "Delete in 30 days (cancellable)",
+                    desc: "Hidden immediately, permanently purged after 30 days. You can cancel by logging back in.",
+                  },
+                  {
+                    key: "immediate" as const,
+                    title: "Delete immediately (permanent)",
+                    desc: "Your profile, verification data and listings are removed right away. Cannot be undone.",
+                  },
+                ]
+              ).map((o) => (
+                <button
+                  key={o.key}
+                  type="button"
+                  onClick={() => setMode(o.key)}
+                  className={`w-full text-left rounded-lg border p-3 transition-colors ${
+                    mode === o.key ? "border-destructive bg-destructive/5" : "hover:bg-muted/50"
+                  }`}
+                >
+                  <p className="text-sm font-medium">{o.title}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{o.desc}</p>
+                </button>
+              ))}
+            </div>
             <div className="flex justify-end gap-2">
               <Button variant="ghost" onClick={() => close(false)}>
                 Cancel
