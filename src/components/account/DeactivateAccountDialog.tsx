@@ -24,13 +24,11 @@ import { useMpin } from "@/hooks/use-mpin";
 import { useAccountLifecycle } from "@/hooks/use-account-lifecycle";
 import { useAuth } from "@/hooks/use-auth";
 
-type Step = "duration" | "mpin" | "password";
+type Step = "duration" | "mpin" | "password" | "confirm";
 
 const DURATIONS = [
-  { value: "7", label: "7 days" },
+  { value: "7", label: "7 days (1 week)" },
   { value: "30", label: "30 days" },
-  { value: "90", label: "90 days" },
-  { value: "indefinite", label: "Indefinite — until I reactivate" },
 ];
 
 export function DeactivateAccountDialog({
