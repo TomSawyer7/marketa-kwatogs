@@ -22,6 +22,7 @@ import {
 import { MpinInput, MPIN_LENGTH } from "@/components/mpin/MpinInput";
 import { useMpin } from "@/hooks/use-mpin";
 import { useAccountLifecycle } from "@/hooks/use-account-lifecycle";
+import { useAuth } from "@/hooks/use-auth";
 
 type Step = "duration" | "mpin" | "password";
 
