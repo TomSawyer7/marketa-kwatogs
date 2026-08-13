@@ -87,6 +87,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error && lock.locked) {
       return { error: `Too many failed attempts. Account locked for ${formatLockDuration(lock.seconds_remaining ?? 600)}.` };
     }
+    if (!error) {
+      // Flip an account back to active when its scheduled deactivation window elapsed.
+      await supabase.rpc("resolve_lifecycle_on_login").catch(() => undefined);
+    }
     return { error: error?.message ?? null };
   }, []);
 
