@@ -58,6 +58,7 @@ type DbListing = {
   price: number;
   images: string[];
   created_at: string;
+  archived_at?: string | null;
 };
 
 const fromDb = (r: DbListing): Listing => ({
