@@ -78,28 +78,24 @@ export function DeactivateAccountDialog({
     if (!password) return;
     setBusy(true);
     const auth = await reauthenticate(password);
+    setBusy(false);
     if (auth.error) {
-      setBusy(false);
       toast.error(auth.error);
       return;
     }
-    const days = duration === "indefinite" ? null : Number(duration);
+    setStep("confirm");
+  };
+
+  const onConfirm = async () => {
+    const days = Number(duration);
+    setBusy(true);
     const { error } = await deactivate(pinRef.current, days);
     setBusy(false);
     if (error) {
       toast.error(error);
       return;
     }
-    if (days) {
-      const until = new Date(Date.now() + days * 86_400_000).toLocaleDateString(undefined, {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      });
-      toast.success(`Your account is deactivated and will be hidden until ${until}.`);
-    } else {
-      toast.success("Your account is deactivated and stays hidden until you reactivate it.");
-    }
+    toast.success("Account deactivated. Your profile and listings are hidden.");
     close(false);
     await signOut();
     navigate("/auth", { replace: true });
