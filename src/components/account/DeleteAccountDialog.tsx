@@ -264,6 +264,18 @@ export function DeleteAccountDialog({
 
         {step === "confirm" && (
           <div className="space-y-4">
+            <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4">
+              <p className="text-sm font-medium text-destructive mb-1">
+                {mode === "immediate"
+                  ? "PERMANENT DELETION DISCLOSURE"
+                  : "30-DAY DELETION DISCLOSURE"}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {mode === "immediate"
+                  ? "Your profile, avatar, personal verification data, and active listings will be immediately deleted. Historical transaction receipts will be anonymized (“Deleted User”) for accounting/legal compliance. This action CANNOT be undone."
+                  : "Your profile and listings will be hidden from the public immediately. Your data will be permanently purged in 30 days. You can cancel this deletion anytime within the next 30 days simply by logging back in."}
+              </p>
+            </div>
             <Label htmlFor="type-delete">
               Type <span className="font-mono font-semibold">DELETE</span> to confirm.
             </Label>
