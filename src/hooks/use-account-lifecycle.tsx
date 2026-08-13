@@ -133,9 +133,20 @@ export function AccountLifecycleProvider({ children }: { children: ReactNode }) 
       deactivate,
       reactivate,
       requestDeletion,
+      deleteNow,
       cancelDeletion,
     }),
-    [loading, lifecycle, daysLeft, refresh, deactivate, reactivate, requestDeletion, cancelDeletion],
+    [
+      loading,
+      lifecycle,
+      daysLeft,
+      refresh,
+      deactivate,
+      reactivate,
+      requestDeletion,
+      deleteNow,
+      cancelDeletion,
+    ],
   );
 
   return <LifecycleCtx.Provider value={value}>{children}</LifecycleCtx.Provider>;
