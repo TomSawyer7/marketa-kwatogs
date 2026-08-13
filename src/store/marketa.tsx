@@ -58,6 +58,7 @@ type DbListing = {
   price: number;
   images: string[];
   created_at: string;
+  archived_at?: string | null;
 };
 
 const fromDb = (r: DbListing): Listing => ({
@@ -79,6 +80,7 @@ export function MarketaProvider({ children }: { children: ReactNode }) {
   const [remoteProfile, setRemoteProfile] = useState<Profile | null>(null);
 
   const [dbListings, setDbListings] = useState<Listing[]>([]);
+  const [archivedIds, setArchivedIds] = useState<Set<string>>(new Set());
   const [loadingListings, setLoadingListings] = useState(true);
   const [saved, setSaved] = useState<string[]>([]);
 
@@ -127,14 +129,17 @@ export function MarketaProvider({ children }: { children: ReactNode }) {
     setLoadingListings(true);
     const { data, error } = await supabase
       .from("listings")
-      .select("id, seller_id, title, description, category, condition, location, price, images, created_at")
+      .select("id, seller_id, title, description, category, condition, location, price, images, created_at, archived_at")
       .order("created_at", { ascending: false });
 
     if (error) {
       console.warn("[marketa] listings load failed:", error.message);
       setDbListings([]);
+      setArchivedIds(new Set());
     } else {
-      setDbListings((data as DbListing[]).map(fromDb));
+      const rows = data as DbListing[];
+      setDbListings(rows.map(fromDb));
+      setArchivedIds(new Set(rows.filter((r) => r.archived_at).map((r) => r.id)));
     }
     setLoadingListings(false);
   }, []);
@@ -193,8 +198,11 @@ export function MarketaProvider({ children }: { children: ReactNode }) {
 
   // Merge DB listings + read-only seed listings (seed first sorted in)
   const listings = useMemo<Listing[]>(() => {
-    return [...dbListings, ...SEED_LISTINGS].sort((a, b) => b.createdAt - a.createdAt);
-  }, [dbListings]);
+    // Listings belonging to deactivated / pending-deletion accounts are archived
+    // server-side and must never surface in the public feed.
+    const visible = dbListings.filter((l) => !archivedIds.has(l.id));
+    return [...visible, ...SEED_LISTINGS].sort((a, b) => b.createdAt - a.createdAt);
+  }, [dbListings, archivedIds]);
 
   const myListings = useMemo(
     () => (user ? dbListings.filter((l) => l.sellerId === user.id) : []),

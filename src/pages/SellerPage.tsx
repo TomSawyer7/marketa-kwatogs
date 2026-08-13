@@ -30,6 +30,18 @@ const SellerPage = () => {
   const { successfulCount } = useSellerTxStats(seller?.id);
   const [bookmarked, setBookmarked] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [hidden, setHidden] = useState(false);
+
+  // Deactivated / pending-deletion accounts must not be browsable.
+  useEffect(() => {
+    if (!id) { setHidden(false); return; }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.rpc("is_account_hidden", { _user_id: id });
+      if (!cancelled) setHidden(Boolean(data));
+    })();
+    return () => { cancelled = true; };
+  }, [id]);
 
   useEffect(() => {
     if (!id || storeSeller) { setFetchedSeller(null); return; }
@@ -70,6 +82,20 @@ const SellerPage = () => {
     } catch (e) { toast.error((e as Error).message); }
     finally { setStarting(false); }
   };
+
+  if (hidden) {
+    return (
+      <AppShell>
+        <div className="px-6 py-16 text-center max-w-md mx-auto">
+          <h2 className="text-xl font-semibold">This account is unavailable</h2>
+          <p className="text-sm text-muted-foreground mt-2">
+            The seller has deactivated their account, so their profile and listings are hidden.
+          </p>
+          <Button asChild className="mt-4"><Link to="/">Back to Marketplace</Link></Button>
+        </div>
+      </AppShell>
+    );
+  }
 
   if (!seller) {
     return (

@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Lock, Mail, Trash2 } from "lucide-react";
 import {
@@ -15,6 +16,7 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp
 import { MpinInput } from "@/components/mpin/MpinInput";
 import { useMpin } from "@/hooks/use-mpin";
 import { useAccountLifecycle } from "@/hooks/use-account-lifecycle";
+import { useAuth } from "@/hooks/use-auth";
 
 const OTP_LENGTH = 8;
 
@@ -29,6 +31,8 @@ export function DeleteAccountDialog({
 }) {
   const { verify, reauthenticate, sendResetOtp, verifyResetOtp, email } = useMpin();
   const { requestDeletion } = useAccountLifecycle();
+  const { signOut } = useAuth();
+  const navigate = useNavigate();
 
   const [step, setStep] = useState<Step>("intro");
   const [pin, setPin] = useState("");
@@ -121,6 +125,8 @@ export function DeleteAccountDialog({
     }
     toast.success("Deletion requested. You have 30 days to change your mind.");
     close(false);
+    await signOut();
+    navigate("/auth", { replace: true });
   };
 
   return (

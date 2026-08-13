@@ -1,4 +1,5 @@
 import { FormEvent, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Lock, PauseCircle } from "lucide-react";
 import {
@@ -21,6 +22,7 @@ import {
 import { MpinInput, MPIN_LENGTH } from "@/components/mpin/MpinInput";
 import { useMpin } from "@/hooks/use-mpin";
 import { useAccountLifecycle } from "@/hooks/use-account-lifecycle";
+import { useAuth } from "@/hooks/use-auth";
 
 type Step = "duration" | "mpin" | "password";
 
@@ -40,6 +42,8 @@ export function DeactivateAccountDialog({
 }) {
   const { verify, reauthenticate } = useMpin();
   const { deactivate } = useAccountLifecycle();
+  const { signOut } = useAuth();
+  const navigate = useNavigate();
 
   const [step, setStep] = useState<Step>("duration");
   const [duration, setDuration] = useState("30");
@@ -88,8 +92,19 @@ export function DeactivateAccountDialog({
       toast.error(error);
       return;
     }
-    toast.success("Your account is now deactivated.");
+    if (days) {
+      const until = new Date(Date.now() + days * 86_400_000).toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+      toast.success(`Your account is deactivated and will be hidden until ${until}.`);
+    } else {
+      toast.success("Your account is deactivated and stays hidden until you reactivate it.");
+    }
     close(false);
+    await signOut();
+    navigate("/auth", { replace: true });
   };
 
   return (
