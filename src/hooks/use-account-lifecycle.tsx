@@ -33,6 +33,7 @@ type Ctx = {
   deactivate: (mpin: string, days: number | null) => Promise<{ error: string | null }>;
   reactivate: () => Promise<{ error: string | null }>;
   requestDeletion: (mpin: string) => Promise<{ error: string | null }>;
+  deleteNow: (mpin: string) => Promise<{ error: string | null }>;
   cancelDeletion: () => Promise<{ error: string | null }>;
 };
 
