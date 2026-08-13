@@ -131,9 +131,7 @@ export function DeactivateAccountDialog({
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground mt-1.5">
-                {duration === "indefinite"
-                  ? "Your account stays hidden until you reactivate it yourself."
-                  : `Your account reactivates automatically after ${duration} days.`}
+                {`Your account reactivates automatically after ${duration} days, or any time you log back in.`}
               </p>
             </div>
             <div className="flex justify-end gap-2">
