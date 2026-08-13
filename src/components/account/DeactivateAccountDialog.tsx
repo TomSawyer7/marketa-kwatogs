@@ -180,10 +180,31 @@ export function DeactivateAccountDialog({
                 Cancel
               </Button>
               <Button type="submit" disabled={busy || password.length < 1}>
-                {busy ? "Deactivating…" : "Deactivate account"}
+                {busy ? "Checking…" : "Continue"}
               </Button>
             </div>
           </form>
+        )}
+
+        {step === "confirm" && (
+          <div className="space-y-4">
+            <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4 space-y-2">
+              <p className="font-medium text-sm">Deactivate Account?</p>
+              <p className="text-sm text-muted-foreground">
+                Your profile and active marketplace listings will be immediately hidden from public
+                search, category feeds, and seller pages for {duration} days. You can reactivate
+                anytime by logging back in.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => close(false)} disabled={busy}>
+                Cancel
+              </Button>
+              <Button onClick={onConfirm} disabled={busy}>
+                {busy ? "Deactivating…" : "Yes, deactivate"}
+              </Button>
+            </div>
+          </div>
         )}
       </DialogContent>
     </Dialog>
