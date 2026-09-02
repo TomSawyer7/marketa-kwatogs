@@ -7,124 +7,40 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { recordAcceptance } from "@/lib/legal";
 
-/* ============================================================================
- * EXACT scanID logic — DO NOT MODIFY
- * ========================================================================== */
-const API_KEY = "XX1ItmlS4XqPOcaxaCeCmh4uQraXZdx6"
+const toBase64 = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const result = e.target?.result as string | undefined;
+      if (!result) return reject(new Error("Failed to read file"));
+      resolve(result.split(",")[1]);
+    };
+    reader.onerror = () => reject(new Error("Failed to read file"));
+    reader.readAsDataURL(file);
+  });
 
 async function scanID(frontFile: File, backFile: File) {
-  const toBase64 = (file: File): Promise<string> => new Promise((resolve) => {
-    const reader = new FileReader()
-    reader.onload = e => resolve((e.target?.result as string).split(',')[1])
-    reader.readAsDataURL(file)
-  })
+  const [front, back] = await Promise.all([
+    toBase64(frontFile),
+    toBase64(backFile),
+  ]);
 
-  const frontBase64 = await toBase64(frontFile)
-  const backBase64  = await toBase64(backFile)
+  const { data, error } = await supabase.functions.invoke("scan-id", {
+    body: { front, back },
+  });
 
-  const response = await fetch('https://api2.idanalyzer.com/scan', {
-    method: 'POST',
-    headers: {
-      'X-API-KEY':    API_KEY,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      document:     frontBase64,
-      documentBack: backBase64,
-      outputImage:  true,
-      outputFace:   true
-    })
-  })
-
-  const data = await response.json()
-  console.log("RAW API RESPONSE:", JSON.stringify(data, null, 2))
-
-  if (data.error) throw new Error(data.error.message)
-
-  const d = data.data
-
-  // Capture raw QR payload from the back of the ID (used later for eVerify.gov.ph)
-  let qrPayload = ""
-  try {
-    const barcodes = d.barcode
-    if (barcodes && Array.isArray(barcodes)) {
-      for (const bc of barcodes) {
-        const raw = bc?.value
-        if (raw && String(raw).trim() !== "") { qrPayload = String(raw); break }
-      }
-    }
-  } catch { /* noop */ }
-
-  let firstName      = d.firstName?.[0]?.value      || ""
-  let middleName     = d.middleName?.[0]?.value     || ""
-  let lastName       = d.lastName?.[0]?.value       || ""
-  let fullName       = d.fullName?.[0]?.value       || ""
-  let dateOfBirth    = d.dob?.[0]?.value            || ""
-  let age            = d.age?.[0]?.value            || ""
-  let address        = d.address1?.[0]?.value       || ""
-  let gender         = d.gender?.[0]?.value         || ""
-  let nationality    = d.nationality?.[0]?.value    || ""
-  let documentNumber = d.documentNumber?.[0]?.value || ""
-  let documentName   = d.documentName?.[0]?.value   || ""
-  let maritalStatus  = d.maritalStatus?.[0]?.value  || ""
-  let bloodType      = d.bloodType?.[0]?.value      || ""
-  let placeOfBirth   = d.placeOfBirth?.[0]?.value   || ""
-  let dateOfIssue    = d.issued?.[0]?.value         || ""
-  let dateOfExpiry   = d.expiry?.[0]?.value         || ""
-
-  try {
-    const barcodes = d.barcode
-    if (barcodes && Array.isArray(barcodes)) {
-      for (const bc of barcodes) {
-        const raw = bc?.value
-        if (!raw || raw.trim() === "") continue
-        const qr      = JSON.parse(raw)
-        const subject = qr?.subject || {}
-        if (!firstName)      firstName      = subject.fName || ""
-        if (!middleName)     middleName     = subject.mName || ""
-        if (!lastName)       lastName       = subject.lName || ""
-        if (!gender)         gender         = subject.sex   || ""
-        if (!placeOfBirth)   placeOfBirth   = subject.POB   || ""
-        if (!dateOfBirth)    dateOfBirth    = subject.DOB   || ""
-        if (!documentNumber) documentNumber = subject.PCN   || ""
-        if (!dateOfIssue)    dateOfIssue    = qr.DateIssued || ""
-        if (!bloodType) {
-          const bf = subject.BF
-          bloodType = Array.isArray(bf) ? bf.join("") : (bf || "")
-        }
-        break
-      }
-    }
-  } catch (err) {
-    console.warn("QR parse failed:", err)
+  if (error) {
+    throw new Error(
+      typeof error.message === "string" ? error.message : "ID scan failed"
+    );
   }
 
-  if (!fullName) {
-    fullName = [firstName, middleName, lastName].filter(Boolean).join(" ")
+  if (data?.error) {
+    throw new Error(data.error);
   }
 
-  return {
-    full_name:       fullName,
-    first_name:      firstName,
-    middle_name:     middleName,
-    last_name:       lastName,
-    document_number: documentNumber,
-    document_name:   documentName,
-    date_of_birth:   dateOfBirth,
-    age:             age,
-    address:         address,
-    gender:          gender,
-    nationality:     nationality,
-    place_of_birth:  placeOfBirth,
-    blood_type:      bloodType,
-    marital_status:  maritalStatus,
-    date_of_issue:   dateOfIssue,
-    date_of_expiry:  dateOfExpiry,
-    face_image:      data.face || "",
-    qr_payload:      qrPayload,
-  }
+  return data as Extracted;
 }
-/* ========================================================================== */
 
 type Extracted = Awaited<ReturnType<typeof scanID>>;
 
