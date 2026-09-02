@@ -7,6 +7,27 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { recordAcceptance } from "@/lib/legal";
 
+type Extracted = {
+  full_name: string;
+  first_name: string;
+  middle_name: string;
+  last_name: string;
+  document_number: string;
+  document_name: string;
+  date_of_birth: string;
+  age: string;
+  address: string;
+  gender: string;
+  nationality: string;
+  place_of_birth: string;
+  blood_type: string;
+  marital_status: string;
+  date_of_issue: string;
+  date_of_expiry: string;
+  face_image: string;
+  qr_payload: string;
+};
+
 const toBase64 = (file: File): Promise<string> =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -19,7 +40,7 @@ const toBase64 = (file: File): Promise<string> =>
     reader.readAsDataURL(file);
   });
 
-async function scanID(frontFile: File, backFile: File) {
+async function scanID(frontFile: File, backFile: File): Promise<Extracted> {
   const [front, back] = await Promise.all([
     toBase64(frontFile),
     toBase64(backFile),
@@ -41,8 +62,6 @@ async function scanID(frontFile: File, backFile: File) {
 
   return data as Extracted;
 }
-
-type Extracted = Awaited<ReturnType<typeof scanID>>;
 
 const toIsoDate = (s: string): string | null => {
   const t = (s || "").trim();
