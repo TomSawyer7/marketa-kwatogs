@@ -570,6 +570,7 @@ export type Database = {
           created_at: string
           email: string | null
           first_name: string | null
+          has_seen_onboarding: boolean
           id: string
           is_verified: boolean
           last_name: string | null
@@ -585,6 +586,7 @@ export type Database = {
           created_at?: string
           email?: string | null
           first_name?: string | null
+          has_seen_onboarding?: boolean
           id: string
           is_verified?: boolean
           last_name?: string | null
@@ -600,6 +602,7 @@ export type Database = {
           created_at?: string
           email?: string | null
           first_name?: string | null
+          has_seen_onboarding?: boolean
           id?: string
           is_verified?: boolean
           last_name?: string | null
