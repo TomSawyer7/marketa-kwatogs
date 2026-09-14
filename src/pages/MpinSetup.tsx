@@ -19,7 +19,7 @@ const MpinSetup = () => {
   }, []);
 
   useEffect(() => {
-    if (!loading && status?.has_mpin) navigate("/browse", { replace: true });
+    if (!loading && status?.has_mpin) navigate("/welcome", { replace: true });
   }, [loading, status, navigate]);
 
   const submit = async (e: FormEvent) => {
@@ -40,7 +40,7 @@ const MpinSetup = () => {
       return;
     }
     toast.success("MPIN created.");
-    navigate("/browse", { replace: true });
+    navigate("/welcome", { replace: true });
   };
 
   return (
