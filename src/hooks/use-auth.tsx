@@ -11,6 +11,8 @@ type AuthCtx = {
   isVerified: boolean;
   isAdmin: boolean;
   emailVerified: boolean;
+  hasSeenOnboarding: boolean;
+  firstName: string | null;
   refreshStatus: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (
@@ -32,18 +34,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [isVerified, setIsVerified] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [hasSeenOnboarding, setHasSeenOnboarding] = useState(true);
+  const [firstName, setFirstName] = useState<string | null>(null);
 
   const fetchStatus = useCallback(async (uid: string | null) => {
     if (!uid) {
       setIsVerified(false);
       setIsAdmin(false);
+      setHasSeenOnboarding(true);
+      setFirstName(null);
       return;
     }
     const [{ data: prof }, { data: roles }] = await Promise.all([
-      supabase.from("profiles").select("is_verified").eq("id", uid).maybeSingle(),
+      supabase.from("profiles").select("is_verified, has_seen_onboarding, first_name").eq("id", uid).maybeSingle(),
       supabase.from("user_roles").select("role").eq("user_id", uid),
     ]);
     setIsVerified(Boolean(prof?.is_verified));
+    setHasSeenOnboarding(prof?.has_seen_onboarding ?? true);
+    setFirstName(prof?.first_name ?? null);
     setIsAdmin(Boolean(roles?.some((r: { role: string }) => r.role === "admin")));
   }, []);
 
@@ -158,6 +166,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isVerified,
         isAdmin,
         emailVerified: Boolean(user?.email_confirmed_at),
+        hasSeenOnboarding,
+        firstName,
         refreshStatus,
         signIn,
         signUp,

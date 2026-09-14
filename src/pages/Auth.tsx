@@ -53,7 +53,7 @@ const PUBLIC_PATHS = new Set([
 const Auth = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, loading, isVerified, isAdmin, emailVerified, signIn, signUp, refreshStatus } = useAuth();
+  const { user, loading, isVerified, isAdmin, emailVerified, hasSeenOnboarding, signIn, signUp, refreshStatus } = useAuth();
   const [tab, setTab] = useState<"login" | "signup">("login");
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -74,10 +74,11 @@ const Auth = () => {
 
   const requestedFrom = (location.state as { from?: string } | null)?.from;
 
-  const destinationFor = (verified: boolean, admin: boolean, emailOk: boolean) => {
+  const destinationFor = (verified: boolean, admin: boolean, emailOk: boolean, onboardingSeen: boolean) => {
     if (admin) return "/admin";
     if (!emailOk) return "/verify-email";
     if (verified) {
+      if (!onboardingSeen) return "/welcome";
       if (requestedFrom && !PUBLIC_PATHS.has(requestedFrom)) return requestedFrom;
       return "/browse";
     }
@@ -86,10 +87,10 @@ const Auth = () => {
 
   useEffect(() => {
     if (!loading && user) {
-      navigate(destinationFor(isVerified, isAdmin, emailVerified), { replace: true });
+      navigate(destinationFor(isVerified, isAdmin, emailVerified, hasSeenOnboarding), { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, loading, isVerified, isAdmin, emailVerified, navigate]);
+  }, [user, loading, isVerified, isAdmin, emailVerified, hasSeenOnboarding, navigate]);
 
   useEffect(() => {
     document.title = tab === "login" ? "Log in · Marketa" : "Sign up · Marketa";

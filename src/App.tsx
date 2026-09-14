@@ -36,6 +36,7 @@ import Terms from "./pages/legal/Terms.tsx";
 import Privacy from "./pages/legal/Privacy.tsx";
 import Community from "./pages/legal/Community.tsx";
 import Contact from "./pages/Contact.tsx";
+import Welcome from "./pages/Welcome.tsx";
 
 const queryClient = new QueryClient();
 
@@ -61,6 +62,7 @@ const App = () => (
                     <Route path="/verify-email" element={<VerifyEmail />} />
                     <Route path="/verify" element={<ProtectedRoute><Verify /></ProtectedRoute>} />
                     <Route path="/mpin-setup" element={<ProtectedRoute><MpinSetup /></ProtectedRoute>} />
+                    <Route path="/welcome" element={<ProtectedRoute><Welcome /></ProtectedRoute>} />
                     <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
                     <Route path="/item/:id" element={<ItemDetail />} />
                     <Route path="/seller/:id" element={<SellerPage />} />

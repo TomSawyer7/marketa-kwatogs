@@ -21,9 +21,10 @@ const VERIFY_PATH = "/verify";
 const VERIFY_EMAIL_PATH = "/verify-email";
 const MPIN_SETUP_PATH = "/mpin-setup";
 const ADMIN_PATH = "/admin";
+const WELCOME_PATH = "/welcome";
 
 export function VerificationGate({ children }: { children: ReactNode }) {
-  const { user, loading, isVerified, isAdmin, emailVerified } = useAuth();
+  const { user, loading, isVerified, isAdmin, emailVerified, hasSeenOnboarding } = useAuth();
   const { loading: mpinLoading, status: mpinStatus } = useMpin();
   const location = useLocation();
 
@@ -75,6 +76,10 @@ export function VerificationGate({ children }: { children: ReactNode }) {
     const allowed = path === MPIN_SETUP_PATH || ALWAYS_ALLOWED.includes(path);
     if (!allowed) return <Navigate to={MPIN_SETUP_PATH} replace />;
   } else if (path === MPIN_SETUP_PATH) {
+    return <Navigate to={hasSeenOnboarding ? "/browse" : WELCOME_PATH} replace />;
+  } else if (!hasSeenOnboarding && path !== WELCOME_PATH) {
+    return <Navigate to={WELCOME_PATH} replace />;
+  } else if (hasSeenOnboarding && path === WELCOME_PATH) {
     return <Navigate to="/browse" replace />;
   }
 
