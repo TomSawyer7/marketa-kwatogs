@@ -8,7 +8,7 @@ import { formatRelative } from "@/lib/format";
 import { RatingStars } from "@/components/reviews/RatingStars";
 import { AppealsWorkspace } from "@/components/admin/AppealsWorkspace";
 
-type Report = { id: string; review_id: string; reporter_id: string; reason: string; status: string; created_at: string;
+type Report = { id: string; review_id: string; reporter_id: string; reason: string; status: string; created_at: string; admin_note?: string | null;
   reviews?: { id: string; rating: number; comment: string | null; reviewee_id: string } | null };
 type Appeal = { id: string; user_id: string; message: string; status: string; created_at: string; admin_note: string | null };
 type Status = { user_id: string; status: string; reason: string | null; updated_at: string };
