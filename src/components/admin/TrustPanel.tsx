@@ -50,13 +50,15 @@ export function TrustPanel() {
     toast.success(`Appeal marked ${status}`); load();
   };
 
-  const resolveReport = async (id: string, status: "upheld" | "dismissed") => {
+  const resolveReport = async (id: string, status: "reviewed" | "resolved" | "needs_follow_up") => {
+    const note = prompt("Short admin note (optional):");
+    if (note === null) return;
     const { data: auth } = await supabase.auth.getUser();
-    const { error } = await supabase.from("review_reports")
-      .update({ status, resolved_by: auth.user?.id, resolved_at: new Date().toISOString() })
+    const { error } = await (supabase.from("review_reports") as any)
+      .update({ status, admin_note: note.trim().slice(0, 500) || null, resolved_by: auth.user?.id, resolved_at: new Date().toISOString() })
       .eq("id", id);
     if (error) return toast.error(error.message);
-    toast.success(`Report ${status}`); load();
+    toast.success("Report updated"); load();
   };
 
   const resolveAppeal = async (id: string, userId: string, status: "approved" | "denied", note?: string) => {
@@ -100,21 +102,19 @@ export function TrustPanel() {
         {reports.map((r) => (
           <div key={r.id} className="bg-card border rounded-lg p-4">
             <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
+              <div className="min-w-0 space-y-1">
                 <div className="flex items-center gap-2"><Badge variant={r.status === "pending" ? "secondary" : "outline"}>{r.status}</Badge>
-                  <span className="text-xs text-muted-foreground">{formatRelative(new Date(r.created_at).getTime())}</span></div>
-                <p className="text-sm mt-2"><span className="text-muted-foreground">Reason:</span> {r.reason}</p>
-                {r.reviews && <div className="mt-2 p-2 rounded border bg-muted/40">
-                  <RatingStars value={r.reviews.rating} />
-                  <p className="text-sm mt-1">{r.reviews.comment ?? <em className="text-muted-foreground">no comment</em>}</p>
-                </div>}
+                  <span className="text-xs text-muted-foreground">{new Date(r.created_at).toLocaleString()}</span></div>
+                <p className="text-sm"><span className="text-muted-foreground">Reporter:</span> {r.reporter_id.slice(0, 8)}…</p>
+                <p className="text-sm"><span className="text-muted-foreground">Reported user:</span> {r.reviews?.reviewee_id ? `${r.reviews.reviewee_id.slice(0, 8)}…` : "—"}</p>
+                <p className="text-sm"><span className="text-muted-foreground">Reason:</span> {r.reason}</p>
+                {r.admin_note && <p className="text-xs text-muted-foreground">Admin note: {r.admin_note}</p>}
               </div>
-              {r.status === "pending" && (
-                <div className="flex flex-col gap-2 shrink-0">
-                  <Button size="sm" onClick={() => resolveReport(r.id, "upheld")}>Uphold</Button>
-                  <Button size="sm" variant="outline" onClick={() => resolveReport(r.id, "dismissed")}>Dismiss</Button>
-                </div>
-              )}
+              <div className="flex flex-col gap-2 shrink-0">
+                <Button size="sm" variant="outline" onClick={() => resolveReport(r.id, "reviewed")}>Reviewed</Button>
+                <Button size="sm" onClick={() => resolveReport(r.id, "resolved")}>Resolved</Button>
+                <Button size="sm" variant="outline" onClick={() => resolveReport(r.id, "needs_follow_up")}>Needs Follow-up</Button>
+              </div>
             </div>
           </div>
         ))}
