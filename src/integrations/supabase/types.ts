@@ -694,6 +694,7 @@ export type Database = {
       }
       review_reports: {
         Row: {
+          admin_note: string | null
           created_at: string
           id: string
           reason: string
@@ -705,6 +706,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          admin_note?: string | null
           created_at?: string
           id?: string
           reason: string
@@ -716,6 +718,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          admin_note?: string | null
           created_at?: string
           id?: string
           reason?: string
