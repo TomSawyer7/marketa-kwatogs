@@ -12,7 +12,6 @@ import { formatRelative } from "@/lib/format";
 import { RatingStars } from "@/components/reviews/RatingStars";
 import { useSignedUrl } from "@/hooks/use-signed-url";
 import { EvidenceLightbox } from "./EvidenceLightbox";
-import { AppealChatViewer } from "./AppealChatViewer";
 import type { AppealRow } from "./AppealsWorkspace";
 
 type Outcome = "approved_removed_entirely" | "approved_comment_only" | "rejected";
@@ -120,11 +119,6 @@ export function AppealDetailPanel({ appeal, onChanged }: { appeal: AppealRow; on
             {appeal.seller_chat_consent ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />} Seller
           </Badge>
         </div>
-        {inAuditWindow && (
-          <Button size="sm" variant="outline" className="mt-3 gap-1" onClick={() => setChatOpen(true)}>
-            <Eye className="h-3.5 w-3.5" /> Open transcript
-          </Button>
-        )}
         {consented && !active && (
           <p className="text-[11px] text-muted-foreground mt-2">Audit window closed (appeal resolved).</p>
         )}
@@ -196,13 +190,6 @@ export function AppealDetailPanel({ appeal, onChanged }: { appeal: AppealRow; on
         onIndexChange={setLightboxIdx}
         open={lightboxIdx !== null}
         onOpenChange={(v) => { if (!v) setLightboxIdx(null); }}
-      />
-      <AppealChatViewer
-        open={chatOpen}
-        onOpenChange={setChatOpen}
-        transactionId={appeal.transaction_id}
-        appealStatus={appeal.status}
-        bothConsented={consented}
       />
     </div>
   );
