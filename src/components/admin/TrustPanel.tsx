@@ -22,19 +22,16 @@ type ReviewAppeal = {
 };
 
 export function TrustPanel() {
-  const [reports, setReports] = useState<Report[]>([]);
   const [appeals, setAppeals] = useState<Appeal[]>([]);
   const [restricted, setRestricted] = useState<Status[]>([]);
   const [reviewAppeals, setReviewAppeals] = useState<ReviewAppeal[]>([]);
 
   const load = useCallback(async () => {
-    const [r, a, s, ra] = await Promise.all([
-      supabase.from("review_reports").select("id, review_id, reporter_id, reason, status, created_at, reviews:review_id(id, rating, comment, reviewee_id)").order("created_at", { ascending: false }),
+    const [a, s, ra] = await Promise.all([
       supabase.from("account_appeals").select("id, user_id, message, status, created_at, admin_note").order("created_at", { ascending: false }),
       supabase.from("account_status").select("user_id, status, reason, updated_at").neq("status", "active").order("updated_at", { ascending: false }),
       (supabase.from("review_appeals") as any).select("id, review_id, transaction_id, seller_id, buyer_id, reason, evidence_urls, buyer_chat_consent, seller_chat_consent, status, admin_notes, created_at, reviews:review_id(id, rating, comment)").order("created_at", { ascending: false }),
     ]);
-    setReports((r.data as Report[]) ?? []);
     setAppeals((a.data as Appeal[]) ?? []);
     setRestricted((s.data as Status[]) ?? []);
     setReviewAppeals(((ra as any).data as ReviewAppeal[]) ?? []);
@@ -48,17 +45,6 @@ export function TrustPanel() {
       .eq("id", id);
     if (error) return toast.error(error.message);
     toast.success(`Appeal marked ${status}`); load();
-  };
-
-  const resolveReport = async (id: string, status: "reviewed" | "resolved" | "needs_follow_up") => {
-    const note = prompt("Short admin note (optional):");
-    if (note === null) return;
-    const { data: auth } = await supabase.auth.getUser();
-    const { error } = await (supabase.from("review_reports") as any)
-      .update({ status, admin_note: note.trim().slice(0, 500) || null, resolved_by: auth.user?.id, resolved_at: new Date().toISOString() })
-      .eq("id", id);
-    if (error) return toast.error(error.message);
-    toast.success("Report updated"); load();
   };
 
   const resolveAppeal = async (id: string, userId: string, status: "approved" | "denied", note?: string) => {
@@ -83,9 +69,8 @@ export function TrustPanel() {
   };
 
   return (
-    <Tabs defaultValue="reports">
+    <Tabs defaultValue="review-appeals">
       <TabsList>
-        <TabsTrigger value="reports">Reports ({reports.filter(r => r.status === "pending").length})</TabsTrigger>
         <TabsTrigger value="review-appeals">Review appeals ({reviewAppeals.filter(a => !["Approved","Rejected","Resolved"].includes(a.status)).length})</TabsTrigger>
         <TabsTrigger value="appeals">Account appeals ({appeals.filter(a => a.status === "pending").length})</TabsTrigger>
         <TabsTrigger value="restricted">Restricted ({restricted.length})</TabsTrigger>
@@ -96,29 +81,6 @@ export function TrustPanel() {
       </TabsContent>
 
 
-
-      <TabsContent value="reports" className="mt-3 space-y-2">
-        {reports.length === 0 && <div className="text-sm text-muted-foreground py-6">No reports.</div>}
-        {reports.map((r) => (
-          <div key={r.id} className="bg-card border rounded-lg p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 space-y-1">
-                <div className="flex items-center gap-2"><Badge variant={r.status === "pending" ? "secondary" : "outline"}>{r.status}</Badge>
-                  <span className="text-xs text-muted-foreground">{new Date(r.created_at).toLocaleString()}</span></div>
-                <p className="text-sm"><span className="text-muted-foreground">Reporter:</span> {r.reporter_id.slice(0, 8)}…</p>
-                <p className="text-sm"><span className="text-muted-foreground">Reported user:</span> {r.reviews?.reviewee_id ? `${r.reviews.reviewee_id.slice(0, 8)}…` : "—"}</p>
-                <p className="text-sm"><span className="text-muted-foreground">Reason:</span> {r.reason}</p>
-                {r.admin_note && <p className="text-xs text-muted-foreground">Admin note: {r.admin_note}</p>}
-              </div>
-              <div className="flex flex-col gap-2 shrink-0">
-                <Button size="sm" variant="outline" onClick={() => resolveReport(r.id, "reviewed")}>Reviewed</Button>
-                <Button size="sm" onClick={() => resolveReport(r.id, "resolved")}>Resolved</Button>
-                <Button size="sm" variant="outline" onClick={() => resolveReport(r.id, "needs_follow_up")}>Needs Follow-up</Button>
-              </div>
-            </div>
-          </div>
-        ))}
-      </TabsContent>
 
       <TabsContent value="appeals" className="mt-3 space-y-2">
         {appeals.length === 0 && <div className="text-sm text-muted-foreground py-6">No appeals.</div>}

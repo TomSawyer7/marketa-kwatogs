@@ -748,6 +748,8 @@ export type Database = {
           reviewee_id: string
           reviewer_id: string
           role: string
+          seller_reply: string | null
+          seller_reply_at: string | null
           status: string
           tags: string[]
           transaction_id: string
@@ -761,6 +763,8 @@ export type Database = {
           reviewee_id: string
           reviewer_id: string
           role: string
+          seller_reply?: string | null
+          seller_reply_at?: string | null
           status?: string
           tags?: string[]
           transaction_id: string
@@ -774,6 +778,8 @@ export type Database = {
           reviewee_id?: string
           reviewer_id?: string
           role?: string
+          seller_reply?: string | null
+          seller_reply_at?: string | null
           status?: string
           tags?: string[]
           transaction_id?: string
@@ -1238,6 +1244,10 @@ export type Database = {
       request_deletion: { Args: { _mpin: string }; Returns: Json }
       resolve_lifecycle_on_login: { Args: never; Returns: Json }
       set_mpin: { Args: { _mpin: string }; Returns: Json }
+      set_review_reply: {
+        Args: { _reply: string; _review_id: string }
+        Returns: undefined
+      }
       verify_audit_chain: {
         Args: { _from_seq?: number; _to_seq?: number }
         Returns: Json

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Flag, MessageSquare, ShieldAlert } from "lucide-react";
+import { MessageSquare, Reply } from "lucide-react";
 import { formatRelative } from "@/lib/format";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -15,7 +15,6 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { POSITIVE_TAGS } from "@/lib/reviews";
-import { AppealReviewDialog } from "./AppealReviewDialog";
 
 type Row = {
   id: string;
@@ -28,12 +27,14 @@ type Row = {
   reviewer_name: string | null;
   created_at: string;
   status: "active" | "removed_review_only" | "removed_entirely";
+  seller_reply: string | null;
+  seller_reply_at: string | null;
 };
 
 type Sort = "recent" | "helpful" | "highest" | "lowest";
 const TRUNCATE = 180;
 
-function ReviewCard({ r, onReport, canReport, canAppeal, onAppeal }: { r: Row; onReport: () => void; canReport: boolean; canAppeal: boolean; onAppeal: () => void }) {
+function ReviewCard({ r, canReply, onReply, onDeleteReply }: { r: Row; canReply: boolean; onReply: () => void; onDeleteReply: () => void }) {
   const [expanded, setExpanded] = useState(false);
   const commentHidden = r.status === "removed_review_only";
   const comment = commentHidden ? "" : (r.comment ?? "");
@@ -53,18 +54,11 @@ function ReviewCard({ r, onReport, canReport, canAppeal, onAppeal }: { r: Row; o
             </span>
           </div>
         </div>
-        <div className="flex items-center gap-1 -mr-2">
-          {canAppeal && (
-            <Button size="sm" variant="ghost" className="gap-1 text-muted-foreground" onClick={onAppeal} title="Appeal this review">
-              <ShieldAlert className="h-3.5 w-3.5" />
-            </Button>
-          )}
-          {canReport && (
-            <Button size="sm" variant="ghost" className="gap-1 text-muted-foreground" onClick={onReport} title="Report this review">
-              <Flag className="h-3.5 w-3.5" />
-            </Button>
-          )}
-        </div>
+        {canReply && !r.seller_reply && (
+          <Button size="sm" variant="ghost" className="gap-1 text-muted-foreground -mr-2" onClick={onReply}>
+            <Reply className="h-3.5 w-3.5" /> Reply
+          </Button>
+        )}
       </div>
       {commentHidden ? (
         <p className="mt-3 text-sm italic text-muted-foreground">Comment removed by moderation.</p>
@@ -93,6 +87,23 @@ function ReviewCard({ r, onReport, canReport, canAppeal, onAppeal }: { r: Row; o
           ))}
         </div>
       )}
+      {r.seller_reply && (
+        <div className="mt-4 ml-4 border-l-2 border-primary/40 bg-muted/50 rounded-r-xl p-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold">Seller's reply</span>
+            <span className="text-[11px] text-muted-foreground">
+              {r.seller_reply_at ? formatRelative(new Date(r.seller_reply_at).getTime()) : ""}
+            </span>
+          </div>
+          <p className="mt-1 text-sm whitespace-pre-line text-foreground/90">{r.seller_reply}</p>
+          {canReply && (
+            <div className="mt-2 flex gap-3">
+              <button onClick={onReply} className="text-xs font-medium text-primary hover:underline">Edit</button>
+              <button onClick={onDeleteReply} className="text-xs font-medium text-destructive hover:underline">Delete</button>
+            </div>
+          )}
+        </div>
+      )}
     </li>
   );
 }
@@ -100,17 +111,15 @@ function ReviewCard({ r, onReport, canReport, canAppeal, onAppeal }: { r: Row; o
 export function UserReviewList({ userId }: { userId: string }) {
   const { user } = useAuth();
   const [rows, setRows] = useState<Row[] | null>(null);
-  const [reportOpen, setReportOpen] = useState<string | null>(null);
-  const [appealOpen, setAppealOpen] = useState<string | null>(null);
-  const [appealedIds, setAppealedIds] = useState<Set<string>>(new Set());
-  const [reason, setReason] = useState("");
+  const [replyOpen, setReplyOpen] = useState<Row | null>(null);
+  const [replyText, setReplyText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [sort, setSort] = useState<Sort>("recent");
 
   const loadRows = async () => {
     const { data, error } = await (supabase
       .from("reviews") as any)
-      .select("id, rating, tags, comment, role, reviewer_id, reviewee_id, created_at, status")
+      .select("id, rating, tags, comment, role, reviewer_id, reviewee_id, created_at, status, seller_reply, seller_reply_at")
       .eq("reviewee_id", userId)
       .neq("status", "removed_entirely")
       .order("created_at", { ascending: false });
@@ -121,14 +130,6 @@ export function UserReviewList({ userId }: { userId: string }) {
       : { data: [] as { id: string; name: string | null }[] };
     const nameMap = new Map((profiles ?? []).map((p) => [p.id, p.name]));
     setRows((data ?? []).map((r: any) => ({ ...r, reviewer_name: nameMap.get(r.reviewer_id) ?? null, status: r.status ?? "active" })) as Row[]);
-
-    if (user && user.id === userId && data && data.length) {
-      const ids = (data as any[]).map((d) => d.id);
-      const { data: appeals } = await (supabase.from("review_appeals") as any)
-        .select("review_id")
-        .in("review_id", ids);
-      setAppealedIds(new Set(((appeals ?? []) as any[]).map((a) => a.review_id)));
-    }
   };
 
   useEffect(() => { loadRows(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [userId, user?.id]);
@@ -149,17 +150,20 @@ export function UserReviewList({ userId }: { userId: string }) {
     return copy;
   }, [rows, sort]);
 
-  const submitReport = async () => {
-    if (!user || !reportOpen) return;
-    if (reason.trim().length < 5) { toast.error("Please describe the issue"); return; }
+  const saveReply = async (reviewId: string, text: string | null) => {
     setSubmitting(true);
-    const { error } = await supabase.from("review_reports").insert({
-      review_id: reportOpen, reporter_id: user.id, reason: reason.trim(),
-    });
+    const { error } = await (supabase.rpc as any)("set_review_reply", { _review_id: reviewId, _reply: text });
     setSubmitting(false);
-    if (error) { toast.error(error.message); return; }
-    toast.success("Report submitted for admin review");
-    setReportOpen(null); setReason("");
+    if (error) { toast.error(error.message); return false; }
+    toast.success(text ? "Reply saved" : "Reply deleted");
+    await loadRows();
+    return true;
+  };
+
+  const submitReply = async () => {
+    if (!replyOpen) return;
+    if (!replyText.trim()) { toast.error("Please write a reply"); return; }
+    if (await saveReply(replyOpen.id, replyText.trim())) { setReplyOpen(null); setReplyText(""); }
   };
 
   if (rows === null) return <div className="text-sm text-muted-foreground py-6">Loading reviews…</div>;
@@ -188,37 +192,29 @@ export function UserReviewList({ userId }: { userId: string }) {
           <ReviewCard
             key={r.id}
             r={r}
-            canReport={!!user && user.id !== r.reviewer_id}
-            onReport={() => setReportOpen(r.id)}
-            canAppeal={!!user && user.id === r.reviewee_id && r.status === "active" && !appealedIds.has(r.id)}
-            onAppeal={() => setAppealOpen(r.id)}
+            canReply={!!user && user.id === r.reviewee_id}
+            onReply={() => { setReplyOpen(r); setReplyText(r.seller_reply ?? ""); }}
+            onDeleteReply={() => { if (confirm("Delete your reply?")) saveReply(r.id, null); }}
           />
         ))}
       </ul>
 
-      {appealOpen && (
-        <AppealReviewDialog
-          open={!!appealOpen}
-          onOpenChange={(v) => !v && setAppealOpen(null)}
-          reviewId={appealOpen}
-          onCreated={() => { setAppealOpen(null); loadRows(); }}
-        />
-      )}
-
-      <Dialog open={!!reportOpen} onOpenChange={(v) => !v && setReportOpen(null)}>
+      <Dialog open={!!replyOpen} onOpenChange={(v) => !v && setReplyOpen(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Report this review</DialogTitle>
+            <DialogTitle>{replyOpen?.seller_reply ? "Edit your reply" : "Reply to this review"}</DialogTitle>
           </DialogHeader>
           <Textarea
             rows={4}
-            placeholder="Why is this review fraudulent or abusive?"
-            value={reason}
-            onChange={(e) => setReason(e.target.value.slice(0, 500))}
+            maxLength={500}
+            placeholder={`Hi ${replyOpen?.reviewer_name ?? "there"}, we're sorry about your experience. What happened? Let us make it right.`}
+            value={replyText}
+            onChange={(e) => setReplyText(e.target.value.slice(0, 500))}
           />
+          <p className="text-xs text-muted-foreground text-right">{replyText.length}/500</p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setReportOpen(null)}>Cancel</Button>
-            <Button onClick={submitReport} disabled={submitting}>{submitting ? "Submitting…" : "Submit report"}</Button>
+            <Button variant="outline" onClick={() => setReplyOpen(null)}>Cancel</Button>
+            <Button onClick={submitReply} disabled={submitting}>{submitting ? "Saving…" : "Post reply"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
