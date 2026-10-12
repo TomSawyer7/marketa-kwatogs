@@ -64,11 +64,21 @@ const Sell = () => {
       toRead.map(
         (f) => new Promise<string>((resolve, reject) => {
           if (!f.type.startsWith("image/")) return reject(new Error("Not an image"));
-          if (f.size > 4 * 1024 * 1024) return reject(new Error("Image too large (max 4MB)"));
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = () => reject(reader.error);
-          reader.readAsDataURL(f);
+          if (f.size > 15 * 1024 * 1024) return reject(new Error("Image too large (max 15MB)"));
+          const url = URL.createObjectURL(f);
+          const img = new Image();
+          img.onload = () => {
+            const max = 1024;
+            const scale = Math.min(1, max / Math.max(img.width, img.height));
+            const c = document.createElement("canvas");
+            c.width = Math.round(img.width * scale);
+            c.height = Math.round(img.height * scale);
+            c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height);
+            URL.revokeObjectURL(url);
+            resolve(c.toDataURL("image/jpeg", 0.7));
+          };
+          img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Couldn't read image")); };
+          img.src = url;
         }).catch((err) => { toast.error(err.message); return ""; }),
       ),
     );
